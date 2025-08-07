@@ -40,16 +40,19 @@ export default function Controls({ config, setConfig, compact = false, viewMode 
 
   // --- Handler für Link-Änderungen ---
   const handleAddLink = () => {
+    const linkCount = currentViewport.links.length;
     const newLink = {
       id: Date.now(), // Einfache eindeutige ID für den PoC
       title: "New Link",
       url: "https://",
-      order: currentViewport.links.length + 1,
+      order: linkCount + 1,
       position: {
-        x: 50,
-        y: 50 + (currentViewport.links.length * 60),
-        width: 200,
-        height: 50
+        x: viewMode === 'mobile' ? 10 : 350, // Mobile: centered in 280px container, Desktop: zentriert
+        y: viewMode === 'mobile' ? 
+           (220 + (linkCount * 55)) : // Mobile: Start bei 220, 55px Abstand (40px + 15px spacing)
+           (320 + (linkCount * 70)),   // Desktop: Start bei 320, 70px Abstand
+        width: viewMode === 'mobile' ? 260 : 200, // Mobile: fits in 280px with 10px margins each side
+        height: viewMode === 'mobile' ? 40 : 50 // Mobile: 40px, Desktop: 50px
       }
     };
     setConfig((prevConfig) => ({

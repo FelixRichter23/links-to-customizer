@@ -24,13 +24,47 @@ const getElementBounds = (element: { position: ElementPosition }) => ({
   centerY: element.position.y + element.position.height / 2,
 });
 
+// Neue Funktion für Container-Bounds basierend auf ViewMode
+const getContainerBounds = (viewMode: 'mobile' | 'desktop') => {
+  if (viewMode === 'mobile') {
+    // Mobile: iPhone mockup ist 300px breit mit 10px Border = 280px inner width
+    // 600px hoch mit 10px Border oben/unten = 580px, aber 32px Notch oben
+    return {
+      width: 280, // Inner content area width
+      height: 580 - 32, // Height minus notch
+      centerX: 140, // 280/2
+      centerY: (580 - 32) / 2 // Zentriert im sichtbaren Bereich
+    };
+  } else {
+    // Desktop: 900px breit, 600px hoch (minus Header)
+    return {
+      width: 900,
+      height: 600 - 32, // Abzüglich Header
+      centerX: 450, // 900/2
+      centerY: (600 - 32) / 2
+    };
+  }
+};
+
 const findAlignmentGuides = (
   targetElement: { position: ElementPosition },
   allElements: Array<{ id: string; position: ElementPosition }>,
-  threshold: number = SNAP_THRESHOLD
+  threshold: number = SNAP_THRESHOLD,
+  viewMode: 'mobile' | 'desktop' = 'mobile'
 ): AlignmentGuide[] => {
   const guides: AlignmentGuide[] = [];
   const targetBounds = getElementBounds({ position: targetElement.position });
+  const containerBounds = getContainerBounds(viewMode);
+
+  // Container-Center-Guides hinzufügen
+  // Vertikale Mitte des Containers
+  if (Math.abs(targetBounds.centerX - containerBounds.centerX) <= threshold) {
+    guides.push({ type: 'vertical', position: containerBounds.centerX, elementId: 'container', snapType: 'center' });
+  }
+  // Horizontale Mitte des Containers
+  if (Math.abs(targetBounds.centerY - containerBounds.centerY) <= threshold) {
+    guides.push({ type: 'horizontal', position: containerBounds.centerY, elementId: 'container', snapType: 'center' });
+  }
 
   allElements.forEach(element => {
     const bounds = getElementBounds(element);
@@ -65,6 +99,46 @@ const findAlignmentGuides = (
   });
 
   return guides;
+};
+
+// Neue Funktion für Size-Snapping
+const findSizeSnapTargets = (
+  targetElement: { position: ElementPosition },
+  allElements: Array<{ id: string; position: ElementPosition }>,
+  threshold: number = SNAP_THRESHOLD
+) => {
+  const targetBounds = getElementBounds({ position: targetElement.position });
+  let snapToWidth: number | null = null;
+  let snapToHeight: number | null = null;
+  let snapToElement: string | null = null;
+
+  allElements.forEach(element => {
+    const bounds = getElementBounds(element);
+    
+    // Prüfe Width-Snapping (wenn Höhen ähnlich sind oder übereinander gestapelt)
+    const heightSimilar = Math.abs(targetElement.position.height - element.position.height) <= threshold;
+    const verticallyAligned = Math.abs(targetBounds.left - bounds.left) <= threshold || 
+                             Math.abs(targetBounds.right - bounds.right) <= threshold ||
+                             Math.abs(targetBounds.centerX - bounds.centerX) <= threshold;
+    
+    if (verticallyAligned && Math.abs(targetElement.position.width - element.position.width) <= threshold * 2) {
+      snapToWidth = element.position.width;
+      snapToElement = element.id;
+    }
+    
+    // Prüfe Height-Snapping (wenn Breiten ähnlich sind oder nebeneinander)
+    const widthSimilar = Math.abs(targetElement.position.width - element.position.width) <= threshold;
+    const horizontallyAligned = Math.abs(targetBounds.top - bounds.top) <= threshold || 
+                               Math.abs(targetBounds.bottom - bounds.bottom) <= threshold ||
+                               Math.abs(targetBounds.centerY - bounds.centerY) <= threshold;
+    
+    if (horizontallyAligned && Math.abs(targetElement.position.height - element.position.height) <= threshold * 2) {
+      snapToHeight = element.position.height;
+      snapToElement = element.id;
+    }
+  });
+
+  return { snapToWidth, snapToHeight, snapToElement };
 };
 
 const snapPositionToGuides = (
@@ -136,7 +210,7 @@ export default function Preview({
     height: 0, 
     elementX: 0, 
     elementY: 0, 
-    direction: '',
+    direction: '' as 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e',
     aspectRatio: 1 // Speichere das ursprüngliche Seitenverhältnis
   });
   const [isDragging, setIsDragging] = useState(false);
@@ -150,7 +224,12 @@ export default function Preview({
       return { id: 'avatar', position: currentViewport.profile.position };
     } else if (elementId === 'bio') {
       return { id: 'bio', position: currentViewport.profile.bioPosition || currentViewport.profile.position };
+    } else if (elementId.startsWith('link-')) {
+      const linkId = parseInt(elementId.replace('link-', ''));
+      const link = links.find(l => l.id === linkId);
+      return link ? { id: elementId, position: link.position } : null;
     } else {
+      // Fallback für andere Formate
       const link = links.find(l => l.id.toString() === elementId);
       return link ? { id: elementId, position: link.position } : null;
     }
@@ -171,8 +250,9 @@ export default function Preview({
     
     // Links hinzufügen (außer dem ausgewählten)
     links.forEach(link => {
-      if (link.id.toString() !== excludeId) {
-        elements.push({ id: link.id.toString(), position: link.position });
+      const linkElementId = `link-${link.id}`;
+      if (linkElementId !== excludeId) {
+        elements.push({ id: linkElementId, position: link.position });
       }
     });
     
@@ -251,9 +331,9 @@ export default function Preview({
 
     setIsDragging(true);
     if (setSelectedElement) setSelectedElement(elementId);
-  }, [isInteractive, setConfig, setSelectedElement]);
+  }, [isInteractive, setConfig, setSelectedElement, viewMode]);
 
-  const handleResizeMouseDown = useCallback((elementId: string, direction: string, e: React.MouseEvent) => {
+  const handleResizeMouseDown = useCallback((elementId: string, direction: 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e', e: React.MouseEvent) => {
     if (!isInteractive || !setConfig) return;
     e.preventDefault();
     e.stopPropagation();
@@ -278,33 +358,50 @@ export default function Preview({
 
     setIsResizing(true);
     if (setSelectedElement) setSelectedElement(elementId);
-  }, [isInteractive, setConfig, setSelectedElement]);
+  }, [isInteractive, setConfig, setSelectedElement, viewMode]);
 
   // Mouse Move & Up Effects
   useEffect(() => {
     if (!isInteractive || !setConfig) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      const isCtrlPressed = e.ctrlKey; // Ctrl-Taste deaktiviert Snapping
+      
       if (isDragging && selectedElement) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
-        let newX = Math.max(0, dragStart.elementX + deltaX);
-        let newY = Math.max(0, dragStart.elementY + deltaY);
-
-        // Hole die aktuellen Element-Positionen für Alignment
+        const containerBounds = getContainerBounds(viewMode);
+        
+        // Berechne neue Position mit Viewport-Grenzen
+        let newX = Math.max(0, Math.min(containerBounds.width, dragStart.elementX + deltaX));
+        let newY = Math.max(0, Math.min(containerBounds.height, dragStart.elementY + deltaY));
+        
+        // Stelle sicher, dass das Element nicht komplett aus dem Viewport geschoben wird
         const currentElement = getCurrentElementPosition(selectedElement);
         if (currentElement) {
-          const otherElements = getAllOtherElements(selectedElement);
-          const tempPosition = { ...currentElement.position, x: newX, y: newY };
-          
-          // Finde Alignment-Guides
-          const guides = findAlignmentGuides({ position: tempPosition }, otherElements);
-          setAlignmentGuides(guides);
-          
-          // Snapping anwenden
-          const snappedPosition = snapPositionToGuides(tempPosition, guides);
-          newX = snappedPosition.x;
-          newY = snappedPosition.y;
+          newX = Math.min(newX, containerBounds.width - currentElement.position.width);
+          newY = Math.min(newY, containerBounds.height - currentElement.position.height);
+        }
+
+        // Snapping nur wenn Ctrl NICHT gedrückt ist
+        if (!isCtrlPressed) {
+          // Hole die aktuellen Element-Positionen für Alignment
+          if (currentElement) {
+            const otherElements = getAllOtherElements(selectedElement);
+            const tempPosition = { ...currentElement.position, x: newX, y: newY };
+            
+            // Finde Alignment-Guides (mit ViewMode)
+            const guides = findAlignmentGuides({ position: tempPosition }, otherElements, SNAP_THRESHOLD, viewMode);
+            setAlignmentGuides(guides);
+            
+            // Snapping anwenden
+            const snappedPosition = snapPositionToGuides(tempPosition, guides);
+            newX = snappedPosition.x;
+            newY = snappedPosition.y;
+          }
+        } else {
+          // Guides verstecken wenn Ctrl gedrückt
+          setAlignmentGuides([]);
         }
 
         updateElementPosition(selectedElement, { x: newX, y: newY });
@@ -314,6 +411,8 @@ export default function Preview({
         const deltaX = e.clientX - resizeStart.x;
         const deltaY = e.clientY - resizeStart.y;
         const isShiftPressed = e.shiftKey;
+        const isCtrlPressed = e.ctrlKey; // Ctrl deaktiviert Snapping
+        const containerBounds = getContainerBounds(viewMode);
         
         let newX = resizeStart.elementX;
         let newY = resizeStart.elementY;
@@ -346,9 +445,36 @@ export default function Preview({
               newWidth = Math.max(50, resizeStart.width + deltaX);
               newHeight = Math.max(30, resizeStart.height + proportionalDeltaY);
               break;
+            // Edge Handles - proportional
+            case 'n': // Top - verwende deltaY als führend
+              const nProportionalDeltaX = deltaY * resizeStart.aspectRatio;
+              newY = Math.max(0, resizeStart.elementY + deltaY);
+              newX = Math.max(0, resizeStart.elementX - nProportionalDeltaX / 2);
+              newHeight = Math.max(30, resizeStart.height - deltaY);
+              newWidth = Math.max(50, resizeStart.width + nProportionalDeltaX);
+              break;
+            case 's': // Bottom - verwende deltaY als führend
+              const sProportionalDeltaX = deltaY * resizeStart.aspectRatio;
+              newHeight = Math.max(30, resizeStart.height + deltaY);
+              newX = Math.max(0, resizeStart.elementX - sProportionalDeltaX / 2);
+              newWidth = Math.max(50, resizeStart.width + sProportionalDeltaX);
+              break;
+            case 'w': // Left - verwende deltaX als führend
+              const wProportionalDeltaY = deltaX / resizeStart.aspectRatio;
+              newX = Math.max(0, resizeStart.elementX + deltaX);
+              newY = Math.max(0, resizeStart.elementY - wProportionalDeltaY / 2);
+              newWidth = Math.max(50, resizeStart.width - deltaX);
+              newHeight = Math.max(30, resizeStart.height + wProportionalDeltaY);
+              break;
+            case 'e': // Right - verwende deltaX als führend
+              const eProportionalDeltaY = deltaX / resizeStart.aspectRatio;
+              newWidth = Math.max(50, resizeStart.width + deltaX);
+              newY = Math.max(0, resizeStart.elementY - eProportionalDeltaY / 2);
+              newHeight = Math.max(30, resizeStart.height + eProportionalDeltaY);
+              break;
           }
         } else {
-          // Normales Resizing
+          // Normales Resizing mit Container-Grenzen
           switch (resizeStart.direction) {
             case 'nw': // Top-Left
               newX = Math.max(0, resizeStart.elementX + deltaX);
@@ -358,36 +484,159 @@ export default function Preview({
               break;
             case 'ne': // Top-Right
               newY = Math.max(0, resizeStart.elementY + deltaY);
-              newWidth = Math.max(50, resizeStart.width + deltaX);
+              newWidth = Math.max(50, Math.min(containerBounds.width - newX, resizeStart.width + deltaX));
               newHeight = Math.max(30, resizeStart.height - deltaY);
               break;
             case 'sw': // Bottom-Left
               newX = Math.max(0, resizeStart.elementX + deltaX);
               newWidth = Math.max(50, resizeStart.width - deltaX);
-              newHeight = Math.max(30, resizeStart.height + deltaY);
+              newHeight = Math.max(30, Math.min(containerBounds.height - newY, resizeStart.height + deltaY));
               break;
             case 'se': // Bottom-Right
-              newWidth = Math.max(50, resizeStart.width + deltaX);
-              newHeight = Math.max(30, resizeStart.height + deltaY);
+              newWidth = Math.max(50, Math.min(containerBounds.width - newX, resizeStart.width + deltaX));
+              newHeight = Math.max(30, Math.min(containerBounds.height - newY, resizeStart.height + deltaY));
+              break;
+            // Edge Handles - nur eine Dimension mit Container-Grenzen
+            case 'n': // Top
+              newY = Math.max(0, resizeStart.elementY + deltaY);
+              newHeight = Math.max(30, resizeStart.height - deltaY);
+              break;
+            case 's': // Bottom
+              newHeight = Math.max(30, Math.min(containerBounds.height - newY, resizeStart.height + deltaY));
+              break;
+            case 'w': // Left
+              newX = Math.max(0, resizeStart.elementX + deltaX);
+              newWidth = Math.max(50, resizeStart.width - deltaX);
+              break;
+            case 'e': // Right
+              newWidth = Math.max(50, Math.min(containerBounds.width - newX, resizeStart.width + deltaX));
               break;
           }
         }
 
-        // Alignment auch beim Resizing anwenden
-        const currentElement = getCurrentElementPosition(selectedElement);
-        if (currentElement) {
-          const otherElements = getAllOtherElements(selectedElement);
-          const tempPosition = { x: newX, y: newY, width: newWidth, height: newHeight };
-          
-          // Finde Alignment-Guides
-          const guides = findAlignmentGuides({ position: tempPosition }, otherElements);
-          setAlignmentGuides(guides);
-          
-          // Snapping anwenden
-          const snappedPosition = snapPositionToGuides(tempPosition, guides);
-          newX = snappedPosition.x;
-          newY = snappedPosition.y;
-          // Bei Resizing nur Position snappen, nicht die Größe verändern
+        // Alignment beim Resizing - nur wenn Ctrl NICHT gedrückt ist
+        if (!isCtrlPressed) {
+          const currentElement = getCurrentElementPosition(selectedElement);
+          if (currentElement) {
+            const otherElements = getAllOtherElements(selectedElement);
+            const tempPosition = { x: newX, y: newY, width: newWidth, height: newHeight };
+            
+            // Finde Alignment-Guides (mit ViewMode)
+            const guides = findAlignmentGuides({ position: tempPosition }, otherElements, SNAP_THRESHOLD, viewMode);
+            setAlignmentGuides(guides);
+            
+            // Size-Snapping nur wenn NICHT proportional resized wird (kein Shift)
+            if (!isShiftPressed) {
+              // Finde Size-Snap Targets
+              const sizeSnaps = findSizeSnapTargets({ position: tempPosition }, otherElements);
+              
+              // Size-Snapping anwenden (hat Priorität über normale Resize-Berechnung)
+              if (sizeSnaps.snapToWidth !== null && 
+                  (resizeStart.direction.includes('e') || resizeStart.direction.includes('w') || 
+                   resizeStart.direction.includes('n') || resizeStart.direction.includes('s'))) {
+                
+                // Berechne neue X-Position basierend auf Resize-Richtung
+                if (resizeStart.direction.includes('w')) {
+                  // Links resizing - X Position anpassen
+                  newX = newX + newWidth - sizeSnaps.snapToWidth;
+                }
+                newWidth = sizeSnaps.snapToWidth;
+              }
+              
+              if (sizeSnaps.snapToHeight !== null && 
+                  (resizeStart.direction.includes('n') || resizeStart.direction.includes('s') || 
+                   resizeStart.direction.includes('e') || resizeStart.direction.includes('w'))) {
+                
+                // Berechne neue Y-Position basierend auf Resize-Richtung
+                if (resizeStart.direction.includes('n')) {
+                  // Oben resizing - Y Position anpassen
+                  newY = newY + newHeight - sizeSnaps.snapToHeight;
+                }
+                newHeight = sizeSnaps.snapToHeight;
+              }
+            }
+            
+            // Position-Constraints prüfen (nach Size-Snapping)
+            let snapConstraints = {
+              preventLeftResize: false,
+              preventRightResize: false,
+              preventTopResize: false,
+              preventBottomResize: false
+            };
+            
+            guides.forEach(guide => {
+              if (guide.type === 'vertical') {
+                if (guide.snapType === 'edge') {
+                  const leftDistance = Math.abs(tempPosition.x - guide.position);
+                  const rightDistance = Math.abs((tempPosition.x + tempPosition.width) - guide.position);
+                  
+                  if (leftDistance <= SNAP_THRESHOLD) {
+                    snapConstraints.preventLeftResize = true;
+                  }
+                  if (rightDistance <= SNAP_THRESHOLD) {
+                    snapConstraints.preventRightResize = true;
+                  }
+                }
+              } else if (guide.type === 'horizontal') {
+                if (guide.snapType === 'edge') {
+                  const topDistance = Math.abs(tempPosition.y - guide.position);
+                  const bottomDistance = Math.abs((tempPosition.y + tempPosition.height) - guide.position);
+                  
+                  if (topDistance <= SNAP_THRESHOLD) {
+                    snapConstraints.preventTopResize = true;
+                  }
+                  if (bottomDistance <= SNAP_THRESHOLD) {
+                    snapConstraints.preventBottomResize = true;
+                  }
+                }
+              }
+            });
+            
+            // Resize-Constraints anwenden (nur wenn proportionales Resizing NICHT aktiv ist)
+            const originalPosition = { x: resizeStart.elementX, y: resizeStart.elementY, width: resizeStart.width, height: resizeStart.height };
+            
+            if (!isShiftPressed) {
+              switch (resizeStart.direction) {
+                case 'nw':
+                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
+                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
+                  break;
+                case 'ne':
+                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
+                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
+                  break;
+                case 'sw':
+                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
+                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
+                  break;
+                case 'se':
+                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
+                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
+                  break;
+                case 'n':
+                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
+                  break;
+                case 's':
+                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
+                  break;
+                case 'w':
+                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
+                  break;
+                case 'e':
+                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
+                  break;
+              }
+            }
+            
+            // Position-Snapping anwenden (nur für Position, nicht für Größe)
+            const finalTempPosition = { x: newX, y: newY, width: newWidth, height: newHeight };
+            const finalSnappedPosition = snapPositionToGuides(finalTempPosition, guides);
+            newX = finalSnappedPosition.x;
+            newY = finalSnappedPosition.y;
+          }
+        } else {
+          // Guides verstecken wenn Ctrl gedrückt
+          setAlignmentGuides([]);
         }
 
         updateElementPosition(selectedElement, { 
@@ -500,6 +749,7 @@ export default function Preview({
         {/* Resize Handles - nur wenn ausgewählt */}
         {isSelected && (
           <>
+            {/* Corner Handles */}
             {/* Top-left */}
             <div
               className="absolute -top-1 -left-1 rounded-full cursor-nw-resize hover:scale-125 transition-transform"
@@ -509,7 +759,7 @@ export default function Preview({
                 height: RESIZE_HANDLE_SIZE,
               }}
               onMouseDown={(e) => handleResizeMouseDown(elementId, 'nw', e)}
-              title="Resize (Shift = proportional)"
+              title="Resize (Shift = proportional, Ctrl = disable snapping)"
             />
             {/* Top-right */}
             <div
@@ -520,7 +770,7 @@ export default function Preview({
                 height: RESIZE_HANDLE_SIZE,
               }}
               onMouseDown={(e) => handleResizeMouseDown(elementId, 'ne', e)}
-              title="Resize (Shift = proportional)"
+              title="Resize (Shift = proportional, Ctrl = disable snapping)"
             />
             {/* Bottom-left */}
             <div
@@ -531,7 +781,7 @@ export default function Preview({
                 height: RESIZE_HANDLE_SIZE,
               }}
               onMouseDown={(e) => handleResizeMouseDown(elementId, 'sw', e)}
-              title="Resize (Shift = proportional)"
+              title="Resize (Shift = proportional, Ctrl = disable snapping)"
             />
             {/* Bottom-right */}
             <div
@@ -542,7 +792,53 @@ export default function Preview({
                 height: RESIZE_HANDLE_SIZE,
               }}
               onMouseDown={(e) => handleResizeMouseDown(elementId, 'se', e)}
-              title="Resize (Shift = proportional)"
+              title="Resize (Shift = proportional, Ctrl = disable snapping)"
+            />
+            
+            {/* Edge Handles - Mitte der Seiten */}
+            {/* Top */}
+            <div
+              className="absolute -top-1 left-1/2 -translate-x-1/2 rounded-full cursor-n-resize hover:scale-125 transition-transform"
+              style={{
+                backgroundColor: contrastColor,
+                width: RESIZE_HANDLE_SIZE,
+                height: RESIZE_HANDLE_SIZE,
+              }}
+              onMouseDown={(e) => handleResizeMouseDown(elementId, 'n', e)}
+              title="Resize vertikal (Shift = proportional, Ctrl = disable snapping)"
+            />
+            {/* Bottom */}
+            <div
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full cursor-s-resize hover:scale-125 transition-transform"
+              style={{
+                backgroundColor: contrastColor,
+                width: RESIZE_HANDLE_SIZE,
+                height: RESIZE_HANDLE_SIZE,
+              }}
+              onMouseDown={(e) => handleResizeMouseDown(elementId, 's', e)}
+              title="Resize vertikal (Shift = proportional, Ctrl = disable snapping)"
+            />
+            {/* Left */}
+            <div
+              className="absolute -left-1 top-1/2 -translate-y-1/2 rounded-full cursor-w-resize hover:scale-125 transition-transform"
+              style={{
+                backgroundColor: contrastColor,
+                width: RESIZE_HANDLE_SIZE,
+                height: RESIZE_HANDLE_SIZE,
+              }}
+              onMouseDown={(e) => handleResizeMouseDown(elementId, 'w', e)}
+              title="Resize horizontal (Shift = proportional, Ctrl = disable snapping)"
+            />
+            {/* Right */}
+            <div
+              className="absolute -right-1 top-1/2 -translate-y-1/2 rounded-full cursor-e-resize hover:scale-125 transition-transform"
+              style={{
+                backgroundColor: contrastColor,
+                width: RESIZE_HANDLE_SIZE,
+                height: RESIZE_HANDLE_SIZE,
+              }}
+              onMouseDown={(e) => handleResizeMouseDown(elementId, 'e', e)}
+              title="Resize horizontal (Shift = proportional, Ctrl = disable snapping)"
             />
           </>
         )}
@@ -642,6 +938,34 @@ export default function Preview({
                   </a>
                 </SelectionBox>
               ))}
+
+            {/* Alignment Guides für Desktop */}
+            {alignmentGuides.map((guide, index) => (
+              <div
+                key={`guide-${index}`}
+                className="absolute pointer-events-none z-50"
+                style={{
+                  ...(guide.type === 'vertical' 
+                    ? {
+                        left: guide.position,
+                        top: 0,
+                        bottom: 0,
+                        width: '1px',
+                        backgroundColor: '#3b82f6',
+                        boxShadow: '0 0 4px rgba(59, 130, 246, 0.8)'
+                      }
+                    : {
+                        top: guide.position,
+                        left: 0,
+                        right: 0,
+                        height: '1px',
+                        backgroundColor: '#3b82f6',
+                        boxShadow: '0 0 4px rgba(59, 130, 246, 0.8)'
+                      }
+                  ),
+                }}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -689,9 +1013,9 @@ export default function Preview({
           elementId="bio"
           style={{
             position: 'absolute',
-            left: profile.bioPosition?.x || 20,
+            left: profile.bioPosition?.x || 10, // Centered in 280px container
             top: profile.bioPosition?.y || (profile.position.y + profile.position.height + 20),
-            width: profile.bioPosition?.width || 260,
+            width: profile.bioPosition?.width || 260, // Fits in 280px with 10px margin each side
             height: profile.bioPosition?.height || 50,
           }}
         >

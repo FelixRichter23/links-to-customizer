@@ -17,7 +17,7 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
       <div className="bg-card border border-border rounded-lg p-3">
         <h3 className="font-semibold mb-2 text-sm">Properties</h3>
         <p className="text-xs text-muted-foreground text-center py-4">
-          Klicke auf ein Element<br/>um es zu bearbeiten
+          Click on an element<br/>to edit it
         </p>
       </div>
     );
@@ -29,21 +29,21 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
       const positionProp = property.split('.')[1];
       newConfig[viewMode].profile.position = {
         ...newConfig[viewMode].profile.position,
-        [positionProp]: Math.round(value) // Runde auf ganze Pixel
+        [positionProp]: Math.round(value) // Round to whole pixels
       };
     } else if (property.startsWith('bioPosition.')) {
       const positionProp = property.split('.')[1];
       if (!newConfig[viewMode].profile.bioPosition) {
         newConfig[viewMode].profile.bioPosition = {
-          x: viewMode === 'mobile' ? 20 : 240,
+          x: viewMode === 'mobile' ? 10 : 240, // Centered in 280px mobile container
           y: viewMode === 'mobile' ? 160 : 248,
-          width: viewMode === 'mobile' ? 260 : 368,
-          height: 50
+          width: viewMode === 'mobile' ? 260 : 368, // Fits in 280px with 10px margins
+          height: 45 // Bio height for mobile reduced
         };
       }
       newConfig[viewMode].profile.bioPosition = {
         ...newConfig[viewMode].profile.bioPosition,
-        [positionProp]: Math.round(value) // Runde auf ganze Pixel
+        [positionProp]: Math.round(value) // Round to whole pixels
       };
     } else {
       (newConfig[viewMode].profile as any)[property] = value;
@@ -73,55 +73,58 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     const profile = currentViewport.profile;
     return (
       <div className="bg-card border border-border rounded-lg p-3">
-        <h3 className="font-semibold mb-2 text-sm">Avatar</h3>
-        <div className="space-y-2">
+        <h3 className="font-semibold mb-3 text-sm">Avatar</h3>
+        <div className="space-y-3">
           <div>
             <label className="text-xs block mb-1">URL</label>
             <input
               type="url"
               value={profile.avatarUrl}
               onChange={(e) => handleProfileChange('avatarUrl', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+              className="w-full bg-input p-1.5 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-1">
-            <div>
-              <label className="text-xs block mb-1">B</label>
-              <input
-                type="number"
-                value={profile.position.width}
-                onChange={(e) => handleProfileChange('position.width', Math.round(parseInt(e.target.value) || 96))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs block mb-1">H</label>
-              <input
-                type="number"
-                value={profile.position.height}
-                onChange={(e) => handleProfileChange('position.height', Math.round(parseInt(e.target.value) || 96))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            <div>
-              <label className="text-xs block mb-1">X</label>
-              <input
-                type="number"
-                value={profile.position.x}
-                onChange={(e) => handleProfileChange('position.x', Math.round(parseInt(e.target.value) || 0))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs block mb-1">Y</label>
-              <input
-                type="number"
-                value={profile.position.y}
-                onChange={(e) => handleProfileChange('position.y', Math.round(parseInt(e.target.value) || 0))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
+          
+          {/* Position & Size - Compact Grid */}
+          <div className="space-y-2">
+            <label className="text-xs block font-medium">Position & Size</label>
+            <div className="grid grid-cols-4 gap-1">
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
+                <input
+                  type="number"
+                  value={profile.position.x}
+                  onChange={(e) => handleProfileChange('position.x', Math.round(parseInt(e.target.value) || 0))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
+                <input
+                  type="number"
+                  value={profile.position.y}
+                  onChange={(e) => handleProfileChange('position.y', Math.round(parseInt(e.target.value) || 0))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Width</label>
+                <input
+                  type="number"
+                  value={profile.position.width}
+                  onChange={(e) => handleProfileChange('position.width', Math.round(parseInt(e.target.value) || 96))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Height</label>
+                <input
+                  type="number"
+                  value={profile.position.height}
+                  onChange={(e) => handleProfileChange('position.height', Math.round(parseInt(e.target.value) || 96))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -133,16 +136,16 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
   if (selectedElement === 'bio') {
     const profile = currentViewport.profile;
     const bioPos = profile.bioPosition || {
-      x: viewMode === 'mobile' ? 20 : 240,
+      x: viewMode === 'mobile' ? 10 : 240, // Centered in 280px mobile container
       y: viewMode === 'mobile' ? 160 : 248,
-      width: viewMode === 'mobile' ? 260 : 368,
-      height: 50
+      width: viewMode === 'mobile' ? 260 : 368, // Fits in 280px with 10px margins
+      height: 40 // Bio height for mobile reduced
     };
     
     return (
       <div className="bg-card border border-border rounded-lg p-3">
-        <h3 className="font-semibold mb-2 text-sm">Bio & Name</h3>
-        <div className="space-y-2">
+        <h3 className="font-semibold mb-3 text-sm">Bio & Name</h3>
+        <div className="space-y-3">
           <div>
             <label className="text-xs block mb-1">Name</label>
             <input
@@ -161,42 +164,46 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
               className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none resize-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-1">
-            <div>
-              <label className="text-xs block mb-1">X</label>
-              <input
-                type="number"
-                value={bioPos.x}
-                onChange={(e) => handleProfileChange('bioPosition.x', Math.round(parseInt(e.target.value) || 0))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs block mb-1">Y</label>
-              <input
-                type="number"
-                value={bioPos.y}
-                onChange={(e) => handleProfileChange('bioPosition.y', Math.round(parseInt(e.target.value) || 0))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs block mb-1">B</label>
-              <input
-                type="number"
-                value={bioPos.width}
-                onChange={(e) => handleProfileChange('bioPosition.width', Math.round(parseInt(e.target.value) || 260))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs block mb-1">H</label>
-              <input
-                type="number"
-                value={bioPos.height}
-                onChange={(e) => handleProfileChange('bioPosition.height', Math.round(parseInt(e.target.value) || 50))}
-                className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-              />
+          {/* Position & Size - Compact Grid */}
+          <div className="space-y-2">
+            <label className="text-xs block font-medium">Position & Size</label>
+            <div className="grid grid-cols-4 gap-1">
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
+                <input
+                  type="number"
+                  value={bioPos.x}
+                  onChange={(e) => handleProfileChange('bioPosition.x', Math.round(parseInt(e.target.value) || 0))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
+                <input
+                  type="number"
+                  value={bioPos.y}
+                  onChange={(e) => handleProfileChange('bioPosition.y', Math.round(parseInt(e.target.value) || 0))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Width</label>
+                <input
+                  type="number"
+                  value={bioPos.width}
+                  onChange={(e) => handleProfileChange('bioPosition.width', Math.round(parseInt(e.target.value) || 260))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Height</label>
+                <input
+                  type="number"
+                  value={bioPos.height}
+                  onChange={(e) => handleProfileChange('bioPosition.height', Math.round(parseInt(e.target.value) || (viewMode === 'mobile' ? 45 : 50)))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -244,14 +251,14 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     return (
       <div className="bg-card border border-border rounded-lg p-3">
         <h3 className="font-semibold mb-2 text-sm">Link #{linkId}</h3>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div>
-            <label className="text-xs block mb-1">Titel</label>
+            <label className="text-xs block mb-1">Title</label>
             <input
               type="text"
               value={link.title}
               onChange={(e) => handleLinkChange(linkId, 'title', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+              className="w-full bg-input p-1.5 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
             />
           </div>
           <div>
@@ -260,98 +267,73 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
               type="url"
               value={link.url}
               onChange={(e) => handleLinkChange(linkId, 'url', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+              className="w-full bg-input p-1.5 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
             />
           </div>
           
-          {/* Position & Size - Kompakt */}
-          <div className="border-t border-border pt-2 mt-2">
-            <label className="text-xs block mb-1 font-medium">Position & Größe</label>
-            <div className="grid grid-cols-2 gap-1">
+          {/* Position & Size - Compact Grid */}
+          <div className="space-y-2">
+            <label className="text-xs block font-medium">Position & Size</label>
+            <div className="grid grid-cols-4 gap-1">
               <div>
-                <label className="text-xs block mb-1">X</label>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
                 <input
                   type="number"
                   value={link.position.x}
                   onChange={(e) => handleLinkChange(linkId, 'position.x', Math.round(parseInt(e.target.value) || 0))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
                 />
               </div>
               <div>
-                <label className="text-xs block mb-1">Y</label>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
                 <input
                   type="number"
                   value={link.position.y}
                   onChange={(e) => handleLinkChange(linkId, 'position.y', Math.round(parseInt(e.target.value) || 0))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
                 />
               </div>
               <div>
-                <label className="text-xs block mb-1">B</label>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Width</label>
                 <input
                   type="number"
                   value={link.position.width}
                   onChange={(e) => handleLinkChange(linkId, 'position.width', Math.round(parseInt(e.target.value) || 200))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
                 />
               </div>
               <div>
-                <label className="text-xs block mb-1">H</label>
+                <label className="text-[10px] block mb-0.5 text-muted-foreground">Height</label>
                 <input
                   type="number"
                   value={link.position.height}
-                  onChange={(e) => handleLinkChange(linkId, 'position.height', Math.round(parseInt(e.target.value) || 50))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+                  onChange={(e) => handleLinkChange(linkId, 'position.height', Math.round(parseInt(e.target.value) || (viewMode === 'mobile' ? 40 : 50)))}
+                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Styling - Kompakt */}
-          <div className="border-t border-border pt-2 mt-2">
-            <label className="text-xs block mb-1 font-medium">Style</label>
-            <div className="grid grid-cols-2 gap-1 mb-2">
-              <div className="flex items-center justify-between">
+          {/* Styling - Compact */}
+          <div className="space-y-2">
+            <label className="text-xs block font-medium">Colors</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded">
                 <label className="text-xs">Button</label>
                 <input
                   type="color"
                   value={link.customColor || config.design.buttonColor}
                   onChange={(e) => handleLinkChange(linkId, 'customColor', e.target.value)}
-                  className="w-5 h-5 bg-transparent border-none cursor-pointer"
+                  className="w-6 h-6 bg-transparent border-none cursor-pointer rounded"
                 />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded">
                 <label className="text-xs">Text</label>
                 <input
                   type="color"
                   value={link.customTextColor || config.design.buttonTextColor}
                   onChange={(e) => handleLinkChange(linkId, 'customTextColor', e.target.value)}
-                  className="w-5 h-5 bg-transparent border-none cursor-pointer"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-1">
-              <div>
-                <label className="text-xs block mb-1">Radius</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  value={link.customBorderRadius || config.design.buttonBorderRadius}
-                  onChange={(e) => handleLinkChange(linkId, 'customBorderRadius', Math.round(parseInt(e.target.value)))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs block mb-1">Font</label>
-                <input
-                  type="number"
-                  min="8"
-                  max="32"
-                  value={link.fontSize || (viewMode === 'desktop' ? 16 : 14)}
-                  onChange={(e) => handleLinkChange(linkId, 'fontSize', Math.round(parseInt(e.target.value)))}
-                  className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring focus:border-ring outline-none"
+                  className="w-6 h-6 bg-transparent border-none cursor-pointer rounded"
                 />
               </div>
             </div>
@@ -362,12 +344,10 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
             onClick={() => {
               handleLinkChange(linkId, 'customColor', undefined);
               handleLinkChange(linkId, 'customTextColor', undefined);
-              handleLinkChange(linkId, 'customBorderRadius', undefined);
-              handleLinkChange(linkId, 'fontSize', undefined);
             }}
-            className="w-full mt-2 px-2 py-1 text-xs bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground rounded transition-colors"
+            className="w-full px-2 py-1.5 text-xs bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground rounded transition-colors"
           >
-            Reset
+            Reset Colors
           </button>
         </div>
       </div>

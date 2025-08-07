@@ -29,8 +29,8 @@ const initialConfig: PageConfig = {
       name: "Your Name",
       bio: "Your short and catchy bio goes here!",
       avatarUrl: "https://avatar.vercel.sh/your-name",
-      position: { x: 88, y: 50, width: 96, height: 96 },
-      bioPosition: { x: 20, y: 160, width: 260, height: 50 },
+      position: { x: 92, y: 50, width: 96, height: 96 }, // Centered in 280px: (280-96)/2 = 92
+      bioPosition: { x: 10, y: 160, width: 260, height: 45 }, // Centered: (280-260)/2 = 10
     },
     links: [
       { 
@@ -38,14 +38,14 @@ const initialConfig: PageConfig = {
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 20, y: 230, width: 260, height: 45 }
+        position: { x: 10, y: 220, width: 260, height: 40 } // Centered: (280-260)/2 = 10
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 20, y: 290, width: 260, height: 45 }
+        position: { x: 10, y: 275, width: 260, height: 40 } // Centered: (280-260)/2 = 10
       },
     ],
   },
