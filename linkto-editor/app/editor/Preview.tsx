@@ -12,7 +12,91 @@ interface PreviewProps {
 }
 
 const RESIZE_HANDLE_SIZE = 8;
-const SNAP_THRESHOLD = 15; // Pixel-Abstand für Snapping - etwas größer für bessere UX
+const SNAP_THRESHOLD = 8; // Smaller threshold for more precise control
+const NEARBY_ELEMENT_THRESHOLD = 100; // Only snap to elements within 100px
+
+// Constraint-System für Drag & Drop und Resize
+const getConstraints = (viewMode: 'mobile' | 'desktop') => {
+  if (viewMode === 'mobile') {
+    return {
+      container: { width: 280, height: 600 },
+      avatar: { 
+        minWidth: 40, maxWidth: 160, 
+        minHeight: 40, maxHeight: 160,
+        minX: 0, minY: 0
+      },
+      bio: { 
+        minWidth: 100, maxWidth: 280, 
+        minHeight: 20, maxHeight: 120,
+        minX: 0, minY: 0
+      },
+      link: { 
+        minWidth: 80, maxWidth: 280, 
+        minHeight: 30, maxHeight: 80,
+        minX: 0, minY: 0
+      }
+    };
+  } else {
+    return {
+      container: { width: 848, height: 800 },
+      avatar: { 
+        minWidth: 60, maxWidth: 240, 
+        minHeight: 60, maxHeight: 240,
+        minX: 0, minY: 0
+      },
+      bio: { 
+        minWidth: 200, maxWidth: 600, 
+        minHeight: 30, maxHeight: 150,
+        minX: 0, minY: 0
+      },
+      link: { 
+        minWidth: 150, maxWidth: 600, 
+        minHeight: 35, maxHeight: 100,
+        minX: 0, minY: 0
+      }
+    };
+  }
+};
+
+const validateAndClamp = (value: number, min: number, max: number) => {
+  return Math.max(min, Math.min(max, Math.round(value)));
+};
+
+const getElementConstraints = (elementId: string, viewMode: 'mobile' | 'desktop') => {
+  const constraints = getConstraints(viewMode);
+  if (elementId === 'avatar') return constraints.avatar;
+  if (elementId === 'bio') return constraints.bio;
+  if (elementId.startsWith('link-')) return constraints.link;
+  return constraints.link; // Fallback
+};
+
+const applyConstraintsToPosition = (
+  elementId: string, 
+  position: ElementPosition, 
+  viewMode: 'mobile' | 'desktop'
+): ElementPosition => {
+  const constraints = getConstraints(viewMode);
+  const elementConstraints = getElementConstraints(elementId, viewMode);
+  
+  // Clamp dimensions
+  const clampedWidth = validateAndClamp(position.width, elementConstraints.minWidth, elementConstraints.maxWidth);
+  const clampedHeight = validateAndClamp(position.height, elementConstraints.minHeight, elementConstraints.maxHeight);
+  
+  // Calculate max positions based on clamped dimensions
+  const maxX = constraints.container.width - clampedWidth;
+  const maxY = constraints.container.height - clampedHeight;
+  
+  // Clamp positions
+  const clampedX = validateAndClamp(position.x, elementConstraints.minX, maxX);
+  const clampedY = validateAndClamp(position.y, elementConstraints.minY, maxY);
+  
+  return {
+    x: clampedX,
+    y: clampedY,
+    width: clampedWidth,
+    height: clampedHeight
+  };
+};
 
 // Hilfsfunktionen für Alignment
 const getElementBounds = (element: { position: ElementPosition }) => ({
@@ -56,45 +140,87 @@ const findAlignmentGuides = (
   const targetBounds = getElementBounds({ position: targetElement.position });
   const containerBounds = getContainerBounds(viewMode);
 
-  // Container-Center-Guides hinzufügen
-  // Vertikale Mitte des Containers
-  if (Math.abs(targetBounds.centerX - containerBounds.centerX) <= threshold) {
-    guides.push({ type: 'vertical', position: containerBounds.centerX, elementId: 'container', snapType: 'center' });
+  // 1. Container center guides (always available)
+  const centerXDistance = Math.abs(targetBounds.centerX - containerBounds.centerX);
+  const centerYDistance = Math.abs(targetBounds.centerY - containerBounds.centerY);
+  
+  if (centerXDistance <= threshold) {
+    guides.push({ 
+      type: 'vertical', 
+      position: containerBounds.centerX, 
+      elementId: 'container', 
+      snapType: 'center' 
+    });
   }
-  // Horizontale Mitte des Containers
-  if (Math.abs(targetBounds.centerY - containerBounds.centerY) <= threshold) {
-    guides.push({ type: 'horizontal', position: containerBounds.centerY, elementId: 'container', snapType: 'center' });
+  
+  if (centerYDistance <= threshold) {
+    guides.push({ 
+      type: 'horizontal', 
+      position: containerBounds.centerY, 
+      elementId: 'container', 
+      snapType: 'center' 
+    });
   }
 
+  // 2. Nearby element guides
   allElements.forEach(element => {
     const bounds = getElementBounds(element);
     
-    // Vertikale Alignment-Guides
-    // Linke Kanten
-    if (Math.abs(targetBounds.left - bounds.left) <= threshold) {
-      guides.push({ type: 'vertical', position: bounds.left, elementId: element.id, snapType: 'edge' });
-    }
-    // Rechte Kanten
-    if (Math.abs(targetBounds.right - bounds.right) <= threshold) {
-      guides.push({ type: 'vertical', position: bounds.right, elementId: element.id, snapType: 'edge' });
-    }
-    // Zentriert horizontal
-    if (Math.abs(targetBounds.centerX - bounds.centerX) <= threshold) {
-      guides.push({ type: 'vertical', position: bounds.centerX, elementId: element.id, snapType: 'center' });
+    // Only consider elements that are nearby (within NEARBY_ELEMENT_THRESHOLD)
+    const isNearby = 
+      Math.abs(targetBounds.centerX - bounds.centerX) <= NEARBY_ELEMENT_THRESHOLD &&
+      Math.abs(targetBounds.centerY - bounds.centerY) <= NEARBY_ELEMENT_THRESHOLD;
+    
+    if (!isNearby) return;
+    
+    // Vertical edge alignment - check if any edge of target element is close to edges of other element
+    const leftToLeftDistance = Math.abs(targetBounds.left - bounds.left);
+    const leftToRightDistance = Math.abs(targetBounds.left - bounds.right);
+    const rightToLeftDistance = Math.abs(targetBounds.right - bounds.left);
+    const rightToRightDistance = Math.abs(targetBounds.right - bounds.right);
+    
+    // Add vertical guides if any edge is close enough
+    if (leftToLeftDistance <= threshold || rightToLeftDistance <= threshold) {
+      guides.push({ 
+        type: 'vertical', 
+        position: bounds.left, 
+        elementId: element.id, 
+        snapType: 'edge' 
+      });
     }
     
-    // Horizontale Alignment-Guides
-    // Obere Kanten
-    if (Math.abs(targetBounds.top - bounds.top) <= threshold) {
-      guides.push({ type: 'horizontal', position: bounds.top, elementId: element.id, snapType: 'edge' });
+    if (leftToRightDistance <= threshold || rightToRightDistance <= threshold) {
+      guides.push({ 
+        type: 'vertical', 
+        position: bounds.right, 
+        elementId: element.id, 
+        snapType: 'edge' 
+      });
     }
-    // Untere Kanten
-    if (Math.abs(targetBounds.bottom - bounds.bottom) <= threshold) {
-      guides.push({ type: 'horizontal', position: bounds.bottom, elementId: element.id, snapType: 'edge' });
+    
+    // Horizontal edge alignment - check if any edge of target element is close to edges of other element
+    const topToTopDistance = Math.abs(targetBounds.top - bounds.top);
+    const topToBottomDistance = Math.abs(targetBounds.top - bounds.bottom);
+    const bottomToTopDistance = Math.abs(targetBounds.bottom - bounds.top);
+    const bottomToBottomDistance = Math.abs(targetBounds.bottom - bounds.bottom);
+    
+    // Add horizontal guides if any edge is close enough
+    if (topToTopDistance <= threshold || bottomToTopDistance <= threshold) {
+      guides.push({ 
+        type: 'horizontal', 
+        position: bounds.top, 
+        elementId: element.id, 
+        snapType: 'edge' 
+      });
     }
-    // Zentriert vertikal
-    if (Math.abs(targetBounds.centerY - bounds.centerY) <= threshold) {
-      guides.push({ type: 'horizontal', position: bounds.centerY, elementId: element.id, snapType: 'center' });
+    
+    if (topToBottomDistance <= threshold || bottomToBottomDistance <= threshold) {
+      guides.push({ 
+        type: 'horizontal', 
+        position: bounds.bottom, 
+        elementId: element.id, 
+        snapType: 'edge' 
+      });
     }
   });
 
@@ -148,43 +274,85 @@ const snapPositionToGuides = (
   let snappedPosition = { ...position };
   const bounds = getElementBounds({ position });
 
+  // Only snap to the closest guide in each direction
+  let closestVerticalGuide: AlignmentGuide | null = null;
+  let closestVerticalDistance = Infinity;
+  let closestHorizontalGuide: AlignmentGuide | null = null;
+  let closestHorizontalDistance = Infinity;
+
+  // Find closest guides
   guides.forEach(guide => {
     if (guide.type === 'vertical') {
-      if (guide.snapType === 'edge') {
-        // Snap linke Kante oder rechte Kante
-        const leftSnap = Math.abs(bounds.left - guide.position);
-        const rightSnap = Math.abs(bounds.right - guide.position);
-        
-        if (leftSnap <= SNAP_THRESHOLD) {
-          snappedPosition.x = guide.position;
-        } else if (rightSnap <= SNAP_THRESHOLD) {
-          snappedPosition.x = guide.position - position.width;
-        }
-      } else if (guide.snapType === 'center') {
-        // Snap Zentrum
-        if (Math.abs(bounds.centerX - guide.position) <= SNAP_THRESHOLD) {
-          snappedPosition.x = guide.position - position.width / 2;
-        }
+      let distance: number;
+      if (guide.snapType === 'center') {
+        distance = Math.abs(bounds.centerX - guide.position);
+      } else {
+        // Edge snapping: find the minimum distance from any edge of current element to the guide
+        const leftToGuideDistance = Math.abs(bounds.left - guide.position);
+        const rightToGuideDistance = Math.abs(bounds.right - guide.position);
+        distance = Math.min(leftToGuideDistance, rightToGuideDistance);
+      }
+      
+      if (distance < closestVerticalDistance) {
+        closestVerticalGuide = guide;
+        closestVerticalDistance = distance;
       }
     } else if (guide.type === 'horizontal') {
-      if (guide.snapType === 'edge') {
-        // Snap obere Kante oder untere Kante
-        const topSnap = Math.abs(bounds.top - guide.position);
-        const bottomSnap = Math.abs(bounds.bottom - guide.position);
-        
-        if (topSnap <= SNAP_THRESHOLD) {
-          snappedPosition.y = guide.position;
-        } else if (bottomSnap <= SNAP_THRESHOLD) {
-          snappedPosition.y = guide.position - position.height;
-        }
-      } else if (guide.snapType === 'center') {
-        // Snap Zentrum
-        if (Math.abs(bounds.centerY - guide.position) <= SNAP_THRESHOLD) {
-          snappedPosition.y = guide.position - position.height / 2;
-        }
+      let distance: number;
+      if (guide.snapType === 'center') {
+        distance = Math.abs(bounds.centerY - guide.position);
+      } else {
+        // Edge snapping: find the minimum distance from any edge of current element to the guide
+        const topToGuideDistance = Math.abs(bounds.top - guide.position);
+        const bottomToGuideDistance = Math.abs(bounds.bottom - guide.position);
+        distance = Math.min(topToGuideDistance, bottomToGuideDistance);
+      }
+      
+      if (distance < closestHorizontalDistance) {
+        closestHorizontalGuide = guide;
+        closestHorizontalDistance = distance;
       }
     }
   });
+
+  // Apply snapping
+  if (closestVerticalGuide !== null && closestVerticalDistance <= SNAP_THRESHOLD) {
+    const vGuide = closestVerticalGuide as AlignmentGuide;
+    if (vGuide.snapType === 'center') {
+      snappedPosition.x = vGuide.position - position.width / 2;
+    } else {
+      // Edge snapping: snap the closest edge to the guide position
+      const leftDistance = Math.abs(bounds.left - vGuide.position);
+      const rightDistance = Math.abs(bounds.right - vGuide.position);
+      
+      if (leftDistance < rightDistance) {
+        // Snap left edge to guide position
+        snappedPosition.x = vGuide.position;
+      } else {
+        // Snap right edge to guide position
+        snappedPosition.x = vGuide.position - position.width;
+      }
+    }
+  }
+  
+  if (closestHorizontalGuide !== null && closestHorizontalDistance <= SNAP_THRESHOLD) {
+    const hGuide = closestHorizontalGuide as AlignmentGuide;
+    if (hGuide.snapType === 'center') {
+      snappedPosition.y = hGuide.position - position.height / 2;
+    } else {
+      // Edge snapping: snap the closest edge to the guide position
+      const topDistance = Math.abs(bounds.top - hGuide.position);
+      const bottomDistance = Math.abs(bounds.bottom - hGuide.position);
+      
+      if (topDistance < bottomDistance) {
+        // Snap top edge to guide position
+        snappedPosition.y = hGuide.position;
+      } else {
+        // Snap bottom edge to guide position
+        snappedPosition.y = hGuide.position - position.height;
+      }
+    }
+  }
 
   return snappedPosition;
 };
@@ -370,23 +538,32 @@ export default function Preview({
       if (isDragging && selectedElement) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
-        const containerBounds = getContainerBounds(viewMode);
         
-        // Berechne neue Position mit Viewport-Grenzen
-        let newX = Math.max(0, Math.min(containerBounds.width, dragStart.elementX + deltaX));
-        let newY = Math.max(0, Math.min(containerBounds.height, dragStart.elementY + deltaY));
+        // Berechne neue Position
+        let newX = dragStart.elementX + deltaX;
+        let newY = dragStart.elementY + deltaY;
         
-        // Stelle sicher, dass das Element nicht komplett aus dem Viewport geschoben wird
+        // Hole aktuelle Element-Position für Constraints
         const currentElement = getCurrentElementPosition(selectedElement);
         if (currentElement) {
-          newX = Math.min(newX, containerBounds.width - currentElement.position.width);
-          newY = Math.min(newY, containerBounds.height - currentElement.position.height);
-        }
+          // Wende Constraints an
+          const constrainedPosition = applyConstraintsToPosition(
+            selectedElement,
+            { 
+              x: newX, 
+              y: newY, 
+              width: currentElement.position.width, 
+              height: currentElement.position.height 
+            },
+            viewMode
+          );
+          
+          newX = constrainedPosition.x;
+          newY = constrainedPosition.y;
 
-        // Snapping nur wenn Ctrl NICHT gedrückt ist
-        if (!isCtrlPressed) {
-          // Hole die aktuellen Element-Positionen für Alignment
-          if (currentElement) {
+          // Snapping nur wenn Ctrl NICHT gedrückt ist
+          if (!isCtrlPressed) {
+            // Hole die aktuellen Element-Positionen für Alignment
             const otherElements = getAllOtherElements(selectedElement);
             const tempPosition = { ...currentElement.position, x: newX, y: newY };
             
@@ -396,12 +573,20 @@ export default function Preview({
             
             // Snapping anwenden
             const snappedPosition = snapPositionToGuides(tempPosition, guides);
-            newX = snappedPosition.x;
-            newY = snappedPosition.y;
+            
+            // Wende Constraints auch auf gesnappte Position an
+            const finalPosition = applyConstraintsToPosition(
+              selectedElement,
+              snappedPosition,
+              viewMode
+            );
+            
+            newX = finalPosition.x;
+            newY = finalPosition.y;
+          } else {
+            // Guides verstecken wenn Ctrl gedrückt
+            setAlignmentGuides([]);
           }
-        } else {
-          // Guides verstecken wenn Ctrl gedrückt
-          setAlignmentGuides([]);
         }
 
         updateElementPosition(selectedElement, { x: newX, y: newY });
@@ -514,6 +699,18 @@ export default function Preview({
           }
         }
 
+        // Wende Constraints an (vor Snapping)
+        const constrainedPosition = applyConstraintsToPosition(
+          selectedElement,
+          { x: newX, y: newY, width: newWidth, height: newHeight },
+          viewMode
+        );
+        
+        newX = constrainedPosition.x;
+        newY = constrainedPosition.y;
+        newWidth = constrainedPosition.width;
+        newHeight = constrainedPosition.height;
+
         // Alignment beim Resizing - nur wenn Ctrl NICHT gedrückt ist
         if (!isCtrlPressed) {
           const currentElement = getCurrentElementPosition(selectedElement);
@@ -556,83 +753,83 @@ export default function Preview({
               }
             }
             
-            // Position-Constraints prüfen (nach Size-Snapping)
-            let snapConstraints = {
-              preventLeftResize: false,
-              preventRightResize: false,
-              preventTopResize: false,
-              preventBottomResize: false
-            };
-            
-            guides.forEach(guide => {
-              if (guide.type === 'vertical') {
-                if (guide.snapType === 'edge') {
-                  const leftDistance = Math.abs(tempPosition.x - guide.position);
-                  const rightDistance = Math.abs((tempPosition.x + tempPosition.width) - guide.position);
-                  
-                  if (leftDistance <= SNAP_THRESHOLD) {
-                    snapConstraints.preventLeftResize = true;
-                  }
-                  if (rightDistance <= SNAP_THRESHOLD) {
-                    snapConstraints.preventRightResize = true;
-                  }
-                }
-              } else if (guide.type === 'horizontal') {
-                if (guide.snapType === 'edge') {
-                  const topDistance = Math.abs(tempPosition.y - guide.position);
-                  const bottomDistance = Math.abs((tempPosition.y + tempPosition.height) - guide.position);
-                  
-                  if (topDistance <= SNAP_THRESHOLD) {
-                    snapConstraints.preventTopResize = true;
-                  }
-                  if (bottomDistance <= SNAP_THRESHOLD) {
-                    snapConstraints.preventBottomResize = true;
-                  }
-                }
-              }
-            });
-            
-            // Resize-Constraints anwenden (nur wenn proportionales Resizing NICHT aktiv ist)
-            const originalPosition = { x: resizeStart.elementX, y: resizeStart.elementY, width: resizeStart.width, height: resizeStart.height };
-            
+            // Position-Snapping NUR bei Edge-Resizing und nur für die entsprechende Kante
             if (!isShiftPressed) {
-              switch (resizeStart.direction) {
-                case 'nw':
-                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
-                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
-                  break;
-                case 'ne':
-                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
-                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
-                  break;
-                case 'sw':
-                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
-                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
-                  break;
-                case 'se':
-                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
-                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
-                  break;
-                case 'n':
-                  if (snapConstraints.preventTopResize) newY = originalPosition.y, newHeight = originalPosition.height;
-                  break;
-                case 's':
-                  if (snapConstraints.preventBottomResize) newHeight = originalPosition.height;
-                  break;
-                case 'w':
-                  if (snapConstraints.preventLeftResize) newX = originalPosition.x, newWidth = originalPosition.width;
-                  break;
-                case 'e':
-                  if (snapConstraints.preventRightResize) newWidth = originalPosition.width;
-                  break;
-              }
+              const finalPosition = { x: newX, y: newY, width: newWidth, height: newHeight };
+              
+              // Nur die relevanten Guides für die aktuelle Resize-Richtung berücksichtigen
+              const relevantGuides = guides.filter(guide => {
+                if (guide.type === 'vertical') {
+                  // Bei West-Resize: nur linke Kante, bei East-Resize: nur rechte Kante
+                  if (resizeStart.direction.includes('w')) {
+                    return guide.snapType === 'edge'; // Linke Kante kann snappen
+                  } else if (resizeStart.direction.includes('e')) {
+                    return guide.snapType === 'edge'; // Rechte Kante kann snappen
+                  }
+                } else if (guide.type === 'horizontal') {
+                  // Bei North-Resize: nur obere Kante, bei South-Resize: nur untere Kante
+                  if (resizeStart.direction.includes('n')) {
+                    return guide.snapType === 'edge'; // Obere Kante kann snappen
+                  } else if (resizeStart.direction.includes('s')) {
+                    return guide.snapType === 'edge'; // Untere Kante kann snappen
+                  }
+                }
+                return false;
+              });
+              
+              // Sanftes Position-Snapping nur für die resize-relevante Kante
+              relevantGuides.forEach(guide => {
+                if (guide.type === 'vertical') {
+                  const currentBounds = getElementBounds({ position: finalPosition });
+                  
+                  if (resizeStart.direction.includes('w')) {
+                    // West-Resize: Linke Kante snappen
+                    const leftDistance = Math.abs(currentBounds.left - guide.position);
+                    if (leftDistance <= SNAP_THRESHOLD) {
+                      const snapDelta = guide.position - currentBounds.left;
+                      newX += snapDelta;
+                      newWidth -= snapDelta;
+                    }
+                  } else if (resizeStart.direction.includes('e')) {
+                    // East-Resize: Rechte Kante snappen
+                    const rightDistance = Math.abs(currentBounds.right - guide.position);
+                    if (rightDistance <= SNAP_THRESHOLD) {
+                      newWidth = guide.position - newX;
+                    }
+                  }
+                } else if (guide.type === 'horizontal') {
+                  const currentBounds = getElementBounds({ position: finalPosition });
+                  
+                  if (resizeStart.direction.includes('n')) {
+                    // North-Resize: Obere Kante snappen
+                    const topDistance = Math.abs(currentBounds.top - guide.position);
+                    if (topDistance <= SNAP_THRESHOLD) {
+                      const snapDelta = guide.position - currentBounds.top;
+                      newY += snapDelta;
+                      newHeight -= snapDelta;
+                    }
+                  } else if (resizeStart.direction.includes('s')) {
+                    // South-Resize: Untere Kante snappen
+                    const bottomDistance = Math.abs(currentBounds.bottom - guide.position);
+                    if (bottomDistance <= SNAP_THRESHOLD) {
+                      newHeight = guide.position - newY;
+                    }
+                  }
+                }
+              });
+              
+              // Wende Constraints erneut an (nach Snapping)
+              const finalConstrainedPosition = applyConstraintsToPosition(
+                selectedElement,
+                { x: newX, y: newY, width: newWidth, height: newHeight },
+                viewMode
+              );
+              
+              newX = finalConstrainedPosition.x;
+              newY = finalConstrainedPosition.y;
+              newWidth = finalConstrainedPosition.width;
+              newHeight = finalConstrainedPosition.height;
             }
-            
-            // Position-Snapping anwenden (nur für Position, nicht für Größe)
-            const finalTempPosition = { x: newX, y: newY, width: newWidth, height: newHeight };
-            const finalSnappedPosition = snapPositionToGuides(finalTempPosition, guides);
-            newX = finalSnappedPosition.x;
-            newY = finalSnappedPosition.y;
           }
         } else {
           // Guides verstecken wenn Ctrl gedrückt
@@ -680,10 +877,13 @@ export default function Preview({
     };
     
     if (elementId === 'avatar') {
-      newConfig[viewMode].profile.position = {
-        ...newConfig[viewMode].profile.position,
-        ...roundedUpdates
-      };
+      const currentPos = newConfig[viewMode].profile.position;
+      const newPos = { ...currentPos, ...roundedUpdates };
+      
+      // Wende Constraints an
+      const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
+      
+      newConfig[viewMode].profile.position = constrainedPos;
     } else if (elementId === 'bio') {
       // Bio hat separate Position-Eigenschaften
       if (!newConfig[viewMode].profile.bioPosition) {
@@ -694,25 +894,29 @@ export default function Preview({
           height: 60
         };
       }
-      newConfig[viewMode].profile.bioPosition = {
-        ...newConfig[viewMode].profile.bioPosition,
-        ...roundedUpdates
-      };
+      const currentPos = newConfig[viewMode].profile.bioPosition;
+      const newPos = { ...currentPos, ...roundedUpdates };
+      
+      // Wende Constraints an
+      const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
+      
+      newConfig[viewMode].profile.bioPosition = constrainedPos;
     } else if (elementId.startsWith('link-')) {
       const linkId = parseInt(elementId.replace('link-', ''));
       const linkIndex = newConfig[viewMode].links.findIndex(link => link.id === linkId);
       if (linkIndex !== -1) {
-        newConfig[viewMode].links[linkIndex].position = {
-          ...newConfig[viewMode].links[linkIndex].position,
-          ...roundedUpdates
-        };
+        const currentPos = newConfig[viewMode].links[linkIndex].position;
+        const newPos = { ...currentPos, ...roundedUpdates };
+        
+        // Wende Constraints an
+        const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
+        
+        newConfig[viewMode].links[linkIndex].position = constrainedPos;
       }
     }
-    
-    setConfig(newConfig);
-  };
 
-  // Background Click Handler
+    setConfig(newConfig);
+  };  // Background Click Handler
   const handleBackgroundClick = () => {
     if (!isInteractive || !setSelectedElement) return;
     setSelectedElement(null);
