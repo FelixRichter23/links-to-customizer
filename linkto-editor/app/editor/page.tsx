@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import Controls from "./Controls";
 import Preview from "./Preview";
 import ElementProperties from "./ElementProperties";
+import UndoRedoToolbar from "./components/UndoRedoToolbar";
+import { useUndoRedo } from "./hooks/useUndoRedo";
 import { type PageConfig } from "./types";
 import { Download } from "lucide-react";
 
@@ -77,10 +79,25 @@ const initialConfig: PageConfig = {
 };
 
 export default function EditorPage() {
-  const [config, setConfig] = useState<PageConfig>(initialConfig);
+  // Undo/Redo System für Config
+  const [config, undoRedoActions] = useUndoRedo<PageConfig>(initialConfig, 10);
+  
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  // Wrapper für setConfig, der automatisch im Undo/Redo-Stack speichert
+  const setConfig = (
+    newConfig: PageConfig | ((prevConfig: PageConfig) => PageConfig), 
+    actionType?: string
+  ) => {
+    if (typeof newConfig === 'function') {
+      const updatedConfig = newConfig(config);
+      undoRedoActions.pushState(updatedConfig);
+    } else {
+      undoRedoActions.pushState(newConfig);
+    }
+  };
   
   // Debug Panel Position & Size State
   const [debugPosition, setDebugPosition] = useState({ x: 100, y: 100 });
@@ -161,6 +178,14 @@ export default function EditorPage() {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold">Link Editor</h1>
+            
+            {/* Undo/Redo Toolbar */}
+            <UndoRedoToolbar
+              canUndo={undoRedoActions.canUndo}
+              canRedo={undoRedoActions.canRedo}
+              onUndo={undoRedoActions.undo}
+              onRedo={undoRedoActions.redo}
+            />
             
             {/* Debug Button - nur für Entwickler */}
             <button

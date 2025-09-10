@@ -5,7 +5,7 @@ import { type PageConfig } from "./types";
 interface ElementPropertiesProps {
   selectedElement: string | null;
   config: PageConfig;
-  setConfig: (config: PageConfig) => void;
+  setConfig: (config: PageConfig, actionType?: string) => void;
   viewMode: 'mobile' | 'desktop';
 }
 
@@ -109,7 +109,7 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
         };
       }
     }
-    setConfig(newConfig);
+    setConfig(newConfig, 'size-change');
   };
 
   if (!selectedElement) {
@@ -126,6 +126,16 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
   const handleProfileChange = (property: string, value: any) => {
     const constraints = getConstraints();
     const newConfig = { ...config };
+    
+    // Bestimme Action-Type basierend auf Property
+    let actionType = 'general';
+    if (property === 'name' || property === 'bio') {
+      actionType = 'text-change';
+    } else if (property.includes('position.x') || property.includes('position.y') || property.includes('bioPosition.x') || property.includes('bioPosition.y')) {
+      actionType = 'position-change';
+    } else if (property.includes('position.width') || property.includes('position.height') || property.includes('bioPosition.width') || property.includes('bioPosition.height')) {
+      actionType = 'size-change';
+    }
     
     if (property.startsWith('position.')) {
       const positionProp = property.split('.')[1];
@@ -197,13 +207,27 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     } else {
       (newConfig[viewMode].profile as any)[property] = value;
     }
-    setConfig(newConfig);
+    setConfig(newConfig, actionType);
   };
 
   const handleLinkChange = (linkId: number, property: string, value: any) => {
     const constraints = getConstraints();
     const newConfig = { ...config };
     const linkIndex = newConfig[viewMode].links.findIndex(link => link.id === linkId);
+    
+    // Bestimme Action-Type basierend auf Property
+    let actionType = 'general';
+    if (property === 'title') {
+      actionType = 'text-change';
+    } else if (property === 'customColor' || property === 'customTextColor') {
+      actionType = 'color-change';
+    } else if (property === 'fontSize') {
+      actionType = 'font-size-change';
+    } else if (property.includes('position.x') || property.includes('position.y')) {
+      actionType = 'position-change';
+    } else if (property.includes('position.width') || property.includes('position.height')) {
+      actionType = 'size-change';
+    }
     if (linkIndex !== -1) {
       if (property.startsWith('position.')) {
         const positionProp = property.split('.')[1];
@@ -241,7 +265,7 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
         (newConfig[viewMode].links[linkIndex] as any)[property] = value;
       }
     }
-    setConfig(newConfig);
+    setConfig(newConfig, actionType);
   };
 
   // Avatar Properties

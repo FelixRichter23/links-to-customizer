@@ -137,25 +137,6 @@ export default function Controls({ config, setConfig, compact = false, viewMode 
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
-      {/* Profile Section */}
-      <div className={`bg-card rounded-lg border border-border ${compact ? 'p-3' : 'p-4'}`}>
-        <h2 className={`font-semibold ${compact ? 'text-base mb-2' : 'text-lg mb-3'}`}>Profile</h2>
-        <div className={compact ? 'space-y-2' : 'space-y-3'}>
-          <div>
-            <label className={`block mb-1 ${compact ? 'text-xs' : 'text-sm'}`}>Bio</label>
-            <textarea
-              placeholder="Your short and catchy bio goes here!"
-              value={currentViewport.profile.bio}
-              onChange={(e) => handleProfileChange("bio", e.target.value)}
-              rows={compact ? 2 : 3}
-              className={`w-full bg-input rounded text-foreground placeholder:text-muted-foreground border border-border focus:ring-2 focus:ring-ring focus:border-ring outline-none resize-none ${
-                compact ? 'p-1.5 text-xs' : 'p-2 text-sm'
-              }`}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Design Section */}
       <div className={`bg-card rounded-lg border border-border ${compact ? 'p-3' : 'p-4'}`}>
         <h2 className={`font-semibold ${compact ? 'text-base mb-2' : 'text-lg mb-3'}`}>Design</h2>
