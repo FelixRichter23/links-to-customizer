@@ -305,10 +305,12 @@ export default function EditorPage() {
         <div className={`flex flex-col justify-start items-center transition-all duration-300 ${
           viewMode === 'desktop' ? 'xl:col-span-2' : 'lg:col-span-1'
         }`}>
-          {/* CustomizerToolbar */}
-          {selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-') || selectedElement.startsWith('link-')) && (
-            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100]">
-              <CustomizerToolbar
+          {/* Preview Container mit integrierter CustomizerToolbar */}
+          <div className="w-full flex justify-center relative">
+            {/* CustomizerToolbar - schwebt über dem Preview */}
+            {selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-') || selectedElement.startsWith('link-')) && (
+              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-50">
+                <CustomizerToolbar
                 selectedElement={selectedElement}
                 onColorChange={(color) => {
                   if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
@@ -458,11 +460,10 @@ export default function EditorPage() {
                   }
                 }}
               />
-            </div>
-          )}
-          
-          {/* Preview */}
-          <div className="w-full flex justify-center">
+              </div>
+            )}
+            
+            {/* Preview Element */}
             <Preview 
               config={config} 
               setConfig={setConfig}
