@@ -6,6 +6,7 @@ import Controls from "./Controls";
 import Preview from "./Preview";
 import ElementProperties from "./ElementProperties";
 import UndoRedoToolbar from "./components/UndoRedoToolbar";
+import CustomizerToolbar from "./CustomizerToolbar";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import { type PageConfig } from "./types";
 import { Download } from "lucide-react";
@@ -28,51 +29,101 @@ const initialConfig: PageConfig = {
   },
   mobile: {
     profile: {
-      name: "Your Name",
-      bio: "Your short and catchy bio goes here!",
       avatarUrl: "https://avatar.vercel.sh/your-name",
       position: { x: 92, y: 50, width: 96, height: 96 }, // Centered in 280px: (280-96)/2 = 92
-      bioPosition: { x: 10, y: 160, width: 260, height: 45 }, // Centered: (280-260)/2 = 10
     },
+    textElements: [
+      {
+        id: "profile-name",
+        type: "text" as const,
+        content: "Your Name",
+        position: { x: 10, y: 150, width: 260, height: 30 },
+        style: {
+          fontSize: 20,
+          fontWeight: "bold",
+          textAlign: "center" as const,
+          color: "#f2f7f7",
+        },
+        order: 1,
+      },
+      {
+        id: "profile-bio", 
+        type: "text" as const,
+        content: "Your short and catchy bio goes here!",
+        position: { x: 10, y: 185, width: 260, height: 30 },
+        style: {
+          fontSize: 14,
+          fontWeight: "normal",
+          textAlign: "center" as const,
+          color: "#f2f7f7",
+        },
+        order: 2,
+      }
+    ],
     links: [
       { 
         id: 1, 
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 10, y: 220, width: 260, height: 40 } // Centered: (280-260)/2 = 10
+        position: { x: 10, y: 240, width: 260, height: 40 } // Adjusted for new text element positions
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 10, y: 275, width: 260, height: 40 } // Centered: (280-260)/2 = 10
+        position: { x: 10, y: 295, width: 260, height: 40 } // Adjusted for new text element positions
       },
     ],
   },
   desktop: {
     profile: {
-      name: "Your Name",
-      bio: "Your short and catchy bio goes here!",
       avatarUrl: "https://avatar.vercel.sh/your-name",
       position: { x: 360, y: 100, width: 128, height: 128 },
-      bioPosition: { x: 240, y: 248, width: 368, height: 50 },
     },
+    textElements: [
+      {
+        id: "profile-name",
+        type: "text" as const,
+        content: "Your Name",
+        position: { x: 240, y: 240, width: 368, height: 40 },
+        style: {
+          fontSize: 28,
+          fontWeight: "bold",
+          textAlign: "center" as const,
+          color: "#f2f7f7",
+        },
+        order: 1,
+      },
+      {
+        id: "profile-bio",
+        type: "text" as const, 
+        content: "Your short and catchy bio goes here!",
+        position: { x: 240, y: 285, width: 368, height: 30 },
+        style: {
+          fontSize: 16,
+          fontWeight: "normal",
+          textAlign: "center" as const,
+          color: "#f2f7f7",
+        },
+        order: 2,
+      }
+    ],
     links: [
       { 
         id: 1, 
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 360, y: 320, width: 200, height: 50 }
+        position: { x: 360, y: 340, width: 200, height: 50 }
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 360, y: 390, width: 200, height: 50 }
+        position: { x: 360, y: 410, width: 200, height: 50 }
       },
     ],
   }
@@ -251,9 +302,166 @@ export default function EditorPage() {
         </div>
 
         {/* Rechte Spalte: Vorschau */}
-        <div className={`flex justify-center items-start transition-all duration-300 ${
+        <div className={`flex flex-col justify-start items-center transition-all duration-300 ${
           viewMode === 'desktop' ? 'xl:col-span-2' : 'lg:col-span-1'
         }`}>
+          {/* CustomizerToolbar */}
+          {selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-') || selectedElement.startsWith('link-')) && (
+            <div className="w-full mb-4">
+              <CustomizerToolbar
+                selectedElement={selectedElement}
+                onColorChange={(color) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    // Handle TextElements
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  color: color
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    // Handle Links
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  color: color
+                                }
+                              }
+                            : link
+                        )
+                      }
+                    }));
+                  }
+                }}
+                onFontChange={(font) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  fontFamily: font
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  }
+                }}
+                onFontWeightChange={(weight) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  fontWeight: weight
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  }
+                }}
+                onTextAlignChange={(align) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  textAlign: align as 'left' | 'center' | 'right'
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  }
+                }}
+                onTextTransformChange={(transform) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  textTransform: transform as 'none' | 'uppercase' | 'lowercase' | 'capitalize'
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  }
+                }}
+                onTextDecorationChange={(decoration) => {
+                  if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        textElements: prev[viewMode].textElements.map(element =>
+                          element.id === selectedElement
+                            ? {
+                                ...element,
+                                style: {
+                                  ...element.style,
+                                  textDecoration: decoration as 'none' | 'underline' | 'overline' | 'line-through'
+                                }
+                              }
+                            : element
+                        )
+                      }
+                    }));
+                  }
+                }}
+              />
+            </div>
+          )}
+          
+          {/* Preview */}
           <div className="w-full flex justify-center">
             <Preview 
               config={config} 

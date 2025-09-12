@@ -7,6 +7,30 @@ export interface ElementPosition {
   height: number;
 }
 
+export interface FontStyle {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  textDecoration?: 'none' | 'underline' | 'overline' | 'line-through';
+  color?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  textShadow?: string;
+  opacity?: number;
+}
+
+// Universelles TextElement Interface
+export interface TextElement {
+  id: string;
+  type: 'text';
+  content: string;
+  position: ElementPosition;
+  style: FontStyle;
+  order: number;
+}
+
 export interface AlignmentGuide {
   type: 'vertical' | 'horizontal';
   position: number;
@@ -16,21 +40,10 @@ export interface AlignmentGuide {
 
 export interface ViewportConfig {
   profile: {
-    name: string;
-    bio: string;
     avatarUrl: string;
     position: ElementPosition; // Avatar Position
-    bioPosition?: ElementPosition; // Separate Bio Position
-    nameStyle?: {
-      fontSize?: number;
-      fontWeight?: string;
-      color?: string;
-    };
-    bioStyle?: {
-      fontSize?: number;
-      color?: string;
-    };
   };
+  textElements: TextElement[];
   links: {
     id: number;
     title: string;
@@ -41,6 +54,7 @@ export interface ViewportConfig {
     customTextColor?: string;
     customBorderRadius?: number;
     fontSize?: number;
+    fontStyle?: FontStyle;
   }[];
 }
 
@@ -75,6 +89,7 @@ export interface Link {
     customTextColor?: string;
     customBorderRadius?: number;
     fontSize?: number;
+    fontStyle?: FontStyle;
 }
 
 export interface Design {

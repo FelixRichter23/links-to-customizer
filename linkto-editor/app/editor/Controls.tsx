@@ -3,19 +3,25 @@
 
 import React from "react";
 import { type PageConfig } from "./types";
-import { Dispatch, SetStateAction, useState } from "react";
-import { Trash, GripVertical } from "lucide-react";
+import { Dispatch, SetStateAction } from "react";
 
 interface ControlsProps {
   config: PageConfig;
   setConfig: Dispatch<SetStateAction<PageConfig>>;
   compact?: boolean;
   viewMode: 'mobile' | 'desktop';
+  selectedElement?: string | null;
+  setSelectedElement?: (elementId: string | null) => void;
 }
 
-export default function Controls({ config, setConfig, compact = false, viewMode }: ControlsProps) {
-  const [draggedItem, setDraggedItem] = useState<number | null>(null);
-
+export default function Controls({ 
+  config, 
+  setConfig, 
+  compact = false, 
+  viewMode, 
+  selectedElement, 
+  setSelectedElement 
+}: ControlsProps) {
   // Get current viewport config
   const currentViewport = config[viewMode];
 
@@ -47,10 +53,10 @@ export default function Controls({ config, setConfig, compact = false, viewMode 
       url: "https://",
       order: linkCount + 1,
       position: {
-        x: viewMode === 'mobile' ? 10 : 350, // Mobile: centered in 280px container, Desktop: zentriert
+        x: viewMode === 'mobile' ? 10 : 360, // Mobile: centered in 280px container, Desktop: zentriert
         y: viewMode === 'mobile' ? 
-           (220 + (linkCount * 55)) : // Mobile: Start bei 220, 55px Abstand (40px + 15px spacing)
-           (320 + (linkCount * 70)),   // Desktop: Start bei 320, 70px Abstand
+           (240 + (linkCount * 55)) : // Mobile: Start bei 240 (nach den Textfeldern), 55px Abstand
+           (330 + (linkCount * 70)),   // Desktop: Start bei 330 (nach den Textfeldern), 70px Abstand
         width: viewMode === 'mobile' ? 260 : 200, // Mobile: fits in 280px with 10px margins each side
         height: viewMode === 'mobile' ? 40 : 50 // Mobile: 40px, Desktop: 50px
       }
@@ -62,77 +68,6 @@ export default function Controls({ config, setConfig, compact = false, viewMode 
         links: [...prevConfig[viewMode].links, newLink],
       }
     }));
-  };
-
-  const handleDeleteLink = (id: number) => {
-    setConfig((prevConfig) => ({
-      ...prevConfig,
-      [viewMode]: {
-        ...prevConfig[viewMode],
-        links: prevConfig[viewMode].links.filter((link) => link.id !== id),
-      }
-    }));
-  };
-
-  const handleLinkChange = (id: number, field: 'title' | 'url', value: string) => {
-      setConfig(prevConfig => ({
-          ...prevConfig,
-          [viewMode]: {
-            ...prevConfig[viewMode],
-            links: prevConfig[viewMode].links.map(link =>
-                link.id === id ? { ...link, [field]: value } : link
-            )
-          }
-      }));
-  };
-
-  // Drag-and-Drop Handlers
-  const handleDragStart = (e: React.DragEvent, id: number) => {
-    setDraggedItem(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/html", id.toString());
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: number) => {
-    e.preventDefault();
-    const draggedId = parseInt(e.dataTransfer.getData("text/html"));
-    
-    if (draggedId === targetId) return;
-
-    setConfig(prevConfig => {
-      const newLinks = [...prevConfig[viewMode].links];
-      const draggedIndex = newLinks.findIndex(link => link.id === draggedId);
-      const targetIndex = newLinks.findIndex(link => link.id === targetId);
-      
-      // Swap the items
-      const draggedLink = newLinks[draggedIndex];
-      newLinks.splice(draggedIndex, 1);
-      newLinks.splice(targetIndex, 0, draggedLink);
-      
-      // Update order numbers
-      newLinks.forEach((link, index) => {
-        link.order = index + 1;
-      });
-      
-      return {
-        ...prevConfig,
-        [viewMode]: {
-          ...prevConfig[viewMode],
-          links: newLinks
-        }
-      };
-    });
-    
-    setDraggedItem(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedItem(null);
   };
 
   return (
@@ -287,77 +222,6 @@ export default function Controls({ config, setConfig, compact = false, viewMode 
               </span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Links Section */}
-      <div className={`bg-card rounded-lg border border-border ${compact ? 'p-3' : 'p-4'}`}>
-        <div className="flex justify-between items-center mb-3">
-          <h2 className={`font-semibold ${compact ? 'text-base' : 'text-lg'}`}>Links</h2>
-          <button
-            onClick={handleAddLink}
-            className={`bg-primary hover:bg-primary/80 text-primary-foreground rounded cursor-pointer transition-colors ${
-              compact ? 'px-2 py-1 text-xs' : 'px-3 py-1 text-xs'
-            }`}
-          >
-            Add Link
-          </button>
-        </div>
-        <div className={compact ? 'space-y-2' : 'space-y-3'}>
-          {currentViewport.links
-            .sort((a, b) => a.order - b.order)
-            .map((link) => (
-            <div 
-              key={link.id} 
-              className={`bg-muted rounded border-secondary/30 transition-all duration-200 ${
-                draggedItem === link.id ? 'opacity-50' : 'hover:bg-muted/80'
-              } ${compact ? 'p-2' : 'p-3'}`}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, link.id)}
-            >
-                <div className={compact ? 'flex items-start gap-2' : 'flex items-start gap-3'}>
-                    <div 
-                        className={`cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1 rounded hover:bg-accent/20 ${
-                          compact ? 'mt-1' : 'mt-2'
-                        }`}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, link.id)}
-                        onDragEnd={handleDragEnd}
-                        title="Drag to reorder"
-                    >
-                        <GripVertical size={compact ? 14 : 16} />
-                    </div>
-                    <div className={compact ? 'flex-1 space-y-1' : 'flex-1 space-y-2'}>
-                        <input
-                            type="text"
-                            placeholder="Title"
-                            value={link.title}
-                            onChange={(e) => handleLinkChange(link.id, 'title', e.target.value)}
-                            className={`w-full bg-input rounded text-foreground placeholder:text-muted-foreground border border-border focus:ring-2 focus:ring-ring focus:border-ring outline-none ${
-                              compact ? 'p-1 text-xs' : 'p-1 text-sm'
-                            }`}
-                        />
-                        <input
-                            type="url"
-                            placeholder="URL"
-                            value={link.url}
-                            onChange={(e) => handleLinkChange(link.id, 'url', e.target.value)}
-                            className={`w-full bg-input rounded text-foreground placeholder:text-muted-foreground border border-border focus:ring-2 focus:ring-ring focus:border-ring outline-none ${
-                              compact ? 'p-1 text-xs' : 'p-1 text-sm'
-                            }`}
-                        />
-                    </div>
-                    <button 
-                        onClick={() => handleDeleteLink(link.id)} 
-                        className={`text-destructive hover:text-destructive/80 cursor-pointer ${
-                          compact ? 'mt-1' : 'mt-1'
-                        }`}
-                    >
-                      <Trash size={compact ? 14 : 16} />
-                    </button>
-                </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

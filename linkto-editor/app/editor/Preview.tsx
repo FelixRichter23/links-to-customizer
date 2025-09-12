@@ -367,7 +367,7 @@ export default function Preview({
 }: PreviewProps) {
   const { design } = config;
   const currentViewport = config[viewMode];
-  const { profile, links } = currentViewport;
+  const { profile, textElements, links } = currentViewport;
 
   // Interactive state
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, elementX: 0, elementY: 0 });
@@ -390,8 +390,9 @@ export default function Preview({
   const getCurrentElementPosition = (elementId: string) => {
     if (elementId === 'avatar') {
       return { id: 'avatar', position: currentViewport.profile.position };
-    } else if (elementId === 'bio') {
-      return { id: 'bio', position: currentViewport.profile.bioPosition || currentViewport.profile.position };
+    } else if (elementId.startsWith('profile-') || elementId.startsWith('text-')) {
+      const textElement = textElements.find(t => t.id === elementId);
+      return textElement ? { id: elementId, position: textElement.position } : null;
     } else if (elementId.startsWith('link-')) {
       const linkId = parseInt(elementId.replace('link-', ''));
       const link = links.find(l => l.id === linkId);
@@ -411,10 +412,12 @@ export default function Preview({
       elements.push({ id: 'avatar', position: currentViewport.profile.position });
     }
     
-    // Bio hinzufügen (außer wenn es das ausgewählte Element ist)
-    if (excludeId !== 'bio' && currentViewport.profile.bioPosition) {
-      elements.push({ id: 'bio', position: currentViewport.profile.bioPosition });
-    }
+    // TextElements hinzufügen (außer dem ausgewählten)
+    textElements.forEach(textElement => {
+      if (textElement.id !== excludeId) {
+        elements.push({ id: textElement.id, position: textElement.position });
+      }
+    });
     
     // Links hinzufügen (außer dem ausgewählten)
     links.forEach(link => {
@@ -884,23 +887,18 @@ export default function Preview({
       const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
       
       newConfig[viewMode].profile.position = constrainedPos;
-    } else if (elementId === 'bio') {
-      // Bio hat separate Position-Eigenschaften
-      if (!newConfig[viewMode].profile.bioPosition) {
-        newConfig[viewMode].profile.bioPosition = {
-          x: 20,
-          y: 150,
-          width: 260,
-          height: 60
-        };
+    } else if (elementId.startsWith('profile-') || elementId.startsWith('text-')) {
+      // TextElement Position aktualisieren
+      const textElementIndex = newConfig[viewMode].textElements.findIndex(el => el.id === elementId);
+      if (textElementIndex !== -1) {
+        const currentPos = newConfig[viewMode].textElements[textElementIndex].position;
+        const newPos = { ...currentPos, ...roundedUpdates };
+        
+        // Wende Constraints an (verwende 'bio' Constraints für TextElements)
+        const constrainedPos = applyConstraintsToPosition('bio', newPos, viewMode);
+        
+        newConfig[viewMode].textElements[textElementIndex].position = constrainedPos;
       }
-      const currentPos = newConfig[viewMode].profile.bioPosition;
-      const newPos = { ...currentPos, ...roundedUpdates };
-      
-      // Wende Constraints an
-      const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
-      
-      newConfig[viewMode].profile.bioPosition = constrainedPos;
     } else if (elementId.startsWith('link-')) {
       const linkId = parseInt(elementId.replace('link-', ''));
       const linkIndex = newConfig[viewMode].links.findIndex(link => link.id === linkId);
@@ -1094,22 +1092,41 @@ export default function Preview({
               />
             </SelectionBox>
 
-            {/* Profil-Infos - getrennt */}
-            <SelectionBox 
-              elementId="bio"
-              style={{
-                position: 'absolute',
-                left: profile.bioPosition?.x || (profile.position.x - 60),
-                top: profile.bioPosition?.y || (profile.position.y + profile.position.height + 20),
-                width: profile.bioPosition?.width || (profile.position.width + 120),
-                height: profile.bioPosition?.height || 60,
-              }}
-            >
-              <div className="text-center pointer-events-none h-full flex flex-col justify-center">
-                <h2 className="font-bold text-2xl mb-2">{profile.name}</h2>
-                <p className="text-base opacity-90">{profile.bio}</p>
-              </div>
-            </SelectionBox>
+            {/* Text Elements */}
+            {textElements
+              .sort((a, b) => a.order - b.order)
+              .map((textElement) => (
+                <SelectionBox 
+                  key={textElement.id} 
+                  elementId={textElement.id}
+                  style={{
+                    position: 'absolute',
+                    left: textElement.position.x,
+                    top: textElement.position.y,
+                    width: textElement.position.width,
+                    height: textElement.position.height,
+                  }}
+                >
+                  <div 
+                    className="pointer-events-none h-full flex items-center justify-center px-2"
+                    style={{
+                      color: textElement.style.color || design.textColor,
+                      fontFamily: textElement.style.fontFamily || 'inherit',
+                      fontSize: textElement.style.fontSize ? `${textElement.style.fontSize}px` : '16px',
+                      fontWeight: textElement.style.fontWeight || 'normal',
+                      textAlign: textElement.style.textAlign || 'center',
+                      textTransform: textElement.style.textTransform || 'none',
+                      textDecoration: textElement.style.textDecoration || 'none',
+                      lineHeight: textElement.style.lineHeight || 1.2,
+                      letterSpacing: textElement.style.letterSpacing ? `${textElement.style.letterSpacing}px` : 'normal',
+                      textShadow: textElement.style.textShadow || 'none',
+                      opacity: textElement.style.opacity || 1,
+                    }}
+                  >
+                    {textElement.content}
+                  </div>
+                </SelectionBox>
+              ))}
 
             {/* Links */}
             {links
@@ -1212,22 +1229,41 @@ export default function Preview({
           />
         </SelectionBox>
 
-        {/* Profil-Infos - getrennt */}
-        <SelectionBox 
-          elementId="bio"
-          style={{
-            position: 'absolute',
-            left: profile.bioPosition?.x || 10, // Centered in 280px container
-            top: profile.bioPosition?.y || (profile.position.y + profile.position.height + 20),
-            width: profile.bioPosition?.width || 260, // Fits in 280px with 10px margin each side
-            height: profile.bioPosition?.height || 50,
-          }}
-        >
-          <div className="text-center pointer-events-none h-full flex flex-col justify-center">
-            <h2 className="font-bold text-lg">{profile.name}</h2>
-            <p className="text-sm opacity-90">{profile.bio}</p>
-          </div>
-        </SelectionBox>
+        {/* Text Elements */}
+        {textElements
+          .sort((a, b) => a.order - b.order)
+          .map((textElement) => (
+            <SelectionBox 
+              key={textElement.id} 
+              elementId={textElement.id}
+              style={{
+                position: 'absolute',
+                left: textElement.position.x,
+                top: textElement.position.y,
+                width: textElement.position.width,
+                height: textElement.position.height,
+              }}
+            >
+              <div 
+                className="pointer-events-none h-full flex items-center justify-center px-2"
+                style={{
+                  color: textElement.style.color || design.textColor,
+                  fontFamily: textElement.style.fontFamily || 'inherit',
+                  fontSize: textElement.style.fontSize ? `${textElement.style.fontSize}px` : '16px',
+                  fontWeight: textElement.style.fontWeight || 'normal',
+                  textAlign: textElement.style.textAlign || 'center',
+                  textTransform: textElement.style.textTransform || 'none',
+                  textDecoration: textElement.style.textDecoration || 'none',
+                  lineHeight: textElement.style.lineHeight || 1.2,
+                  letterSpacing: textElement.style.letterSpacing ? `${textElement.style.letterSpacing}px` : 'normal',
+                  textShadow: textElement.style.textShadow || 'none',
+                  opacity: textElement.style.opacity || 1,
+                }}
+              >
+                {textElement.content}
+              </div>
+            </SelectionBox>
+          ))}
 
         {/* Links */}
         {links

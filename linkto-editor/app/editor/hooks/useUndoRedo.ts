@@ -1,5 +1,5 @@
 // app/editor/hooks/useUndoRedo.ts
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface UndoRedoState<T> {
   history: T[];
@@ -11,7 +11,7 @@ interface UndoRedoActions<T> {
   canRedo: boolean;
   undo: () => void;
   redo: () => void;
-  pushState: (state: T) => void;
+  pushState: (state: T, actionType?: string) => void;
   reset: (initialState: T) => void;
   getCurrentState: () => T;
 }
@@ -25,12 +25,43 @@ export function useUndoRedo<T>(
     currentIndex: 0,
   });
 
+  // Debouncing für Text-Änderungen
+  const textDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingTextStateRef = useRef<T | null>(null);
+
   const currentState = state.history[state.currentIndex];
 
   const canUndo = state.currentIndex > 0;
   const canRedo = state.currentIndex < state.history.length - 1;
 
-  const pushState = useCallback((newState: T) => {
+  const pushState = useCallback((newState: T, actionType?: string) => {
+    // Text-Änderungen debouncing (800ms Verzögerung)
+    if (actionType === 'text-change') {
+      // Speichere den pending State
+      pendingTextStateRef.current = newState;
+      
+      // Lösche vorherigen Timeout
+      if (textDebounceTimeoutRef.current) {
+        clearTimeout(textDebounceTimeoutRef.current);
+      }
+      
+      // Setze neuen Timeout
+      textDebounceTimeoutRef.current = setTimeout(() => {
+        if (pendingTextStateRef.current) {
+          // Führe die eigentliche State-Aktualisierung aus
+          performStateUpdate(pendingTextStateRef.current);
+          pendingTextStateRef.current = null;
+        }
+      }, 800); // 800ms Debounce für Text
+      
+      return;
+    }
+    
+    // Für alle anderen Actions: Sofortige Aktualisierung
+    performStateUpdate(newState);
+  }, [maxHistorySize]);
+
+  const performStateUpdate = useCallback((newState: T) => {
     setState(prevState => {
       // Prüfe ob der neue State identisch mit dem aktuellen ist
       const currentStateJson = JSON.stringify(prevState.history[prevState.currentIndex]);
