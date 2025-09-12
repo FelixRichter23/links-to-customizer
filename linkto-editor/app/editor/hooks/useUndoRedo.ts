@@ -1,5 +1,5 @@
 // app/editor/hooks/useUndoRedo.ts
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 interface UndoRedoState<T> {
   history: T[];
@@ -14,6 +14,7 @@ interface UndoRedoActions<T> {
   pushState: (state: T, actionType?: string) => void;
   reset: (initialState: T) => void;
   getCurrentState: () => T;
+  commitPendingText: () => void;
 }
 
 export function useUndoRedo<T>(
@@ -29,58 +30,20 @@ export function useUndoRedo<T>(
   const textDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingTextStateRef = useRef<T | null>(null);
 
-  const currentState = state.history[state.currentIndex];
+  const currentState = pendingTextStateRef.current || state.history[state.currentIndex];
 
   const canUndo = state.currentIndex > 0;
   const canRedo = state.currentIndex < state.history.length - 1;
 
-  const pushState = useCallback((newState: T, actionType?: string) => {
-    // Text-Änderungen debouncing (800ms Verzögerung)
-    if (actionType === 'text-change') {
-      // Speichere den pending State
-      pendingTextStateRef.current = newState;
-      
-      // Lösche vorherigen Timeout
-      if (textDebounceTimeoutRef.current) {
-        clearTimeout(textDebounceTimeoutRef.current);
-      }
-      
-      // Setze neuen Timeout
-      textDebounceTimeoutRef.current = setTimeout(() => {
-        if (pendingTextStateRef.current) {
-          // Führe die eigentliche State-Aktualisierung aus
-          performStateUpdate(pendingTextStateRef.current);
-          pendingTextStateRef.current = null;
-        }
-      }, 800); // 800ms Debounce für Text
-      
-      return;
-    }
-    
-    // Für alle anderen Actions: Sofortige Aktualisierung
-    performStateUpdate(newState);
-  }, [maxHistorySize]);
-
-  const performStateUpdate = useCallback((newState: T) => {
+  // Hilfsfunktion zum tatsächlichen Hinzufügen zum History
+  const addToHistory = useCallback((newState: T) => {
     setState(prevState => {
-      // Prüfe ob der neue State identisch mit dem aktuellen ist
-      const currentStateJson = JSON.stringify(prevState.history[prevState.currentIndex]);
-      const newStateJson = JSON.stringify(newState);
-      
-      if (currentStateJson === newStateJson) {
-        // Keine Änderung, nicht zur History hinzufügen
-        return prevState;
-      }
-      
-      // Entferne alle Redo-History nach dem aktuellen Index
       const newHistory = prevState.history.slice(0, prevState.currentIndex + 1);
-      
-      // Füge den neuen State hinzu
       newHistory.push(newState);
       
-      // Limitiere die History-Größe
+      // Limit history size
       if (newHistory.length > maxHistorySize) {
-        newHistory.shift(); // Entferne das älteste Element
+        newHistory.shift();
         return {
           history: newHistory,
           currentIndex: newHistory.length - 1,
@@ -94,25 +57,79 @@ export function useUndoRedo<T>(
     });
   }, [maxHistorySize]);
 
+  // Commit pending text changes
+  const commitPendingText = useCallback(() => {
+    if (pendingTextStateRef.current) {
+      addToHistory(pendingTextStateRef.current);
+      pendingTextStateRef.current = null;
+    }
+    if (textDebounceTimeoutRef.current) {
+      clearTimeout(textDebounceTimeoutRef.current);
+      textDebounceTimeoutRef.current = null;
+    }
+  }, [addToHistory]);
+
+  const pushState = useCallback((newState: T, actionType?: string) => {
+    // Text-Änderungen debouncing (1000ms Verzögerung)
+    if (actionType === 'text-change') {
+      // Speichere den pending State für sofortige UI Updates
+      pendingTextStateRef.current = newState;
+      
+      // Lösche vorherigen Timeout
+      if (textDebounceTimeoutRef.current) {
+        clearTimeout(textDebounceTimeoutRef.current);
+      }
+      
+      // Setze neuen Timeout
+      textDebounceTimeoutRef.current = setTimeout(() => {
+        if (pendingTextStateRef.current) {
+          addToHistory(pendingTextStateRef.current);
+          pendingTextStateRef.current = null;
+        }
+      }, 1000);
+      
+      return; // Nicht sofort zur History hinzufügen
+    }
+
+    // Commit any pending text changes first
+    commitPendingText();
+    
+    // Für alle anderen Änderungen: sofort zur History hinzufügen
+    addToHistory(newState);
+  }, [addToHistory, commitPendingText]);
+
   const undo = useCallback(() => {
+    // Commit any pending text changes first
+    commitPendingText();
+    
     if (canUndo) {
       setState(prevState => ({
         ...prevState,
         currentIndex: prevState.currentIndex - 1,
       }));
     }
-  }, [canUndo]);
+  }, [canUndo, commitPendingText]);
 
   const redo = useCallback(() => {
+    // Commit any pending text changes first
+    commitPendingText();
+    
     if (canRedo) {
       setState(prevState => ({
         ...prevState,
         currentIndex: prevState.currentIndex + 1,
       }));
     }
-  }, [canRedo]);
+  }, [canRedo, commitPendingText]);
 
   const reset = useCallback((newInitialState: T) => {
+    // Clear any pending changes
+    if (textDebounceTimeoutRef.current) {
+      clearTimeout(textDebounceTimeoutRef.current);
+      textDebounceTimeoutRef.current = null;
+    }
+    pendingTextStateRef.current = null;
+    
     setState({
       history: [newInitialState],
       currentIndex: 0,
@@ -123,41 +140,17 @@ export function useUndoRedo<T>(
     return currentState;
   }, [currentState]);
 
-  // Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
-
-      if (ctrlOrCmd) {
-        if (event.key === 'z' && !event.shiftKey) {
-          // Undo: Ctrl+Z (Windows) or Cmd+Z (Mac)
-          event.preventDefault();
-          undo();
-        } else if (
-          (event.key === 'y') || 
-          (event.key === 'z' && event.shiftKey)
-        ) {
-          // Redo: Ctrl+Y or Ctrl+Shift+Z (Windows) or Cmd+Y or Cmd+Shift+Z (Mac)
-          event.preventDefault();
-          redo();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
-
-  const actions: UndoRedoActions<T> = {
-    canUndo,
-    canRedo,
-    undo,
-    redo,
-    pushState,
-    reset,
-    getCurrentState,
-  };
-
-  return [currentState, actions];
+  return [
+    currentState,
+    {
+      canUndo,
+      canRedo,
+      undo,
+      redo,
+      pushState,
+      reset,
+      getCurrentState,
+      commitPendingText,
+    },
+  ];
 }

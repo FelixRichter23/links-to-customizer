@@ -1,6 +1,6 @@
 // app/editor/ElementProperties.tsx
 import React from "react";
-import { type PageConfig } from "./types";
+import { type PageConfig, type TextElement } from "./types";
 
 interface ElementPropertiesProps {
   selectedElement: string | null;
@@ -95,16 +95,16 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
   }
 
   // Handler für TextElement Änderungen
-  const handleTextElementChange = (elementId: string, property: string, value: any) => {
+  const handleTextElementChange = (elementId: string, property: string, value: string | number | boolean) => {
     const constraints = getConstraints();
     const newConfig = JSON.parse(JSON.stringify(config));
-    const elementIndex = newConfig[viewMode].textElements.findIndex((el: any) => el.id === elementId);
+    const elementIndex = newConfig[viewMode].textElements.findIndex((el: TextElement) => el.id === elementId);
     
     if (elementIndex !== -1) {
       if (property.startsWith('position.')) {
         const positionProp = property.split('.')[1];
         const currentPos = newConfig[viewMode].textElements[elementIndex].position;
-        let newValue = Math.round(value);
+        let newValue = Math.round(Number(value));
         
         if (positionProp === 'width') {
           newValue = validateAndClamp(newValue, constraints.textElement.minWidth, constraints.textElement.maxWidth);
@@ -144,14 +144,14 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
   };
 
   // Handler für Avatar Änderungen
-  const handleAvatarChange = (property: string, value: any) => {
+  const handleAvatarChange = (property: string, value: string | number | boolean) => {
     const constraints = getConstraints();
     const newConfig = JSON.parse(JSON.stringify(config));
     
     if (property.startsWith('position.')) {
       const positionProp = property.split('.')[1];
       const currentPos = newConfig[viewMode].profile.position;
-      let newValue = Math.round(value);
+      let newValue = Math.round(Number(value));
       
       if (positionProp === 'width') {
         newValue = validateAndClamp(newValue, constraints.avatar.minWidth, constraints.avatar.maxWidth);
@@ -184,16 +184,16 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
   };
 
   // Handler für Link Änderungen
-  const handleLinkChange = (linkId: number, property: string, value: any) => {
+  const handleLinkChange = (linkId: number, property: string, value: string | number | boolean) => {
     const constraints = getConstraints();
     const newConfig = JSON.parse(JSON.stringify(config));
-    const linkIndex = newConfig[viewMode].links.findIndex((link: any) => link.id === linkId);
+    const linkIndex = newConfig[viewMode].links.findIndex((link: { id: number }) => link.id === linkId);
     
     if (linkIndex !== -1) {
       if (property.startsWith('position.')) {
         const positionProp = property.split('.')[1];
         const currentPos = newConfig[viewMode].links[linkIndex].position;
-        let newValue = Math.round(value);
+        let newValue = Math.round(Number(value));
         
         if (positionProp === 'width') {
           newValue = validateAndClamp(newValue, constraints.link.minWidth, constraints.link.maxWidth);
@@ -220,7 +220,7 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
           [positionProp]: newValue
         };
       } else {
-        (newConfig[viewMode].links[linkIndex] as any)[property] = value;
+        (newConfig[viewMode].links[linkIndex] as Record<string, string | number | boolean>)[property] = value;
       }
     }
     setConfig(newConfig, 'link-change');

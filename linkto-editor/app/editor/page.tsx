@@ -307,7 +307,7 @@ export default function EditorPage() {
         }`}>
           {/* CustomizerToolbar */}
           {selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-') || selectedElement.startsWith('link-')) && (
-            <div className="w-full mb-4">
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100]">
               <CustomizerToolbar
                 selectedElement={selectedElement}
                 onColorChange={(color) => {

@@ -1,6 +1,7 @@
 // app/editor/Preview.tsx
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { type PageConfig, type ElementPosition, type AlignmentGuide } from "./types";
+import ContextMenu from "./ContextMenu";
 
 interface PreviewProps {
   config: PageConfig;
@@ -271,7 +272,7 @@ const snapPositionToGuides = (
   position: ElementPosition,
   guides: AlignmentGuide[]
 ): ElementPosition => {
-  let snappedPosition = { ...position };
+  const snappedPosition = { ...position };
   const bounds = getElementBounds({ position });
 
   // Only snap to the closest guide in each direction
@@ -385,6 +386,21 @@ export default function Preview({
   const [isResizing, setIsResizing] = useState(false);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ContextMenu state
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    elementId: string | null;
+    isMobile: boolean;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    elementId: null,
+    isMobile: false
+  });
 
   // Hilfsfunktionen für Element-Management
   const getCurrentElementPosition = (elementId: string) => {
@@ -530,6 +546,111 @@ export default function Preview({
     setIsResizing(true);
     if (setSelectedElement) setSelectedElement(elementId);
   }, [isInteractive, setConfig, setSelectedElement, viewMode]);
+
+  // ContextMenu Handlers
+  const handleContextMenu = useCallback((elementId: string, e: React.MouseEvent) => {
+    if (!isInteractive) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isMobile = window.innerWidth <= 768;
+    
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      elementId,
+      isMobile
+    });
+  }, [isInteractive]);
+
+  const handleLongPress = useCallback((elementId: string, e: React.TouchEvent) => {
+    if (!isInteractive) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    setContextMenu({
+      visible: true,
+      x: touch.clientX,
+      y: touch.clientY,
+      elementId,
+      isMobile: true
+    });
+  }, [isInteractive]);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleContextMenuAction = useCallback((action: string, elementId: string) => {
+    if (!setConfig) return;
+
+    switch (action) {
+      case 'edit':
+        // Inline editing wird später implementiert
+        if (setSelectedElement) setSelectedElement(elementId);
+        break;
+      
+      case 'duplicate':
+        // Dupliziere das Element
+        const newConfig = JSON.parse(JSON.stringify(config));
+        if (elementId.startsWith('text-')) {
+          const element = textElements.find(t => t.id === elementId);
+          if (element) {
+            const newElement = {
+              ...element,
+              id: `text-${Date.now()}`,
+              position: {
+                ...element.position,
+                x: element.position.x + 20,
+                y: element.position.y + 20
+              }
+            };
+            newConfig[viewMode].textElements.push(newElement);
+            setConfig(newConfig);
+          }
+        } else if (elementId.startsWith('link-')) {
+          const linkId = parseInt(elementId.replace('link-', ''));
+          const link = links.find(l => l.id === linkId);
+          if (link) {
+            const newLink = {
+              ...link,
+              id: Math.max(...links.map(l => l.id), 0) + 1,
+              position: {
+                ...link.position,
+                x: link.position.x + 20,
+                y: link.position.y + 20
+              }
+            };
+            newConfig[viewMode].links.push(newLink);
+            setConfig(newConfig);
+          }
+        }
+        break;
+      
+      case 'delete':
+        // Lösche das Element
+        const deleteConfig = JSON.parse(JSON.stringify(config));
+        if (elementId.startsWith('text-')) {
+          deleteConfig[viewMode].textElements = textElements.filter(t => t.id !== elementId);
+        } else if (elementId.startsWith('link-')) {
+          const linkId = parseInt(elementId.replace('link-', ''));
+          deleteConfig[viewMode].links = links.filter(l => l.id !== linkId);
+        }
+        setConfig(deleteConfig);
+        if (setSelectedElement && selectedElement === elementId) {
+          setSelectedElement(null);
+        }
+        break;
+      
+      case 'link':
+        // Link-Bearbeitung wird später implementiert
+        console.log('Link editing for:', elementId);
+        break;
+    }
+    
+    closeContextMenu();
+  }, [config, setConfig, viewMode, textElements, links, setSelectedElement, selectedElement, closeContextMenu]);
 
   // Mouse Move & Up Effects
   useEffect(() => {
@@ -945,6 +1066,22 @@ export default function Preview({
         }}
         onClick={(e) => handleElementClick(elementId, e)}
         onMouseDown={(e) => handleMouseDown(elementId, e)}
+        onContextMenu={(e) => handleContextMenu(elementId, e)}
+        onTouchStart={(e) => {
+          // Long press detection für mobile
+          const touchTimer = setTimeout(() => {
+            handleLongPress(elementId, e);
+          }, 500);
+          
+          const cleanup = () => {
+            clearTimeout(touchTimer);
+            document.removeEventListener('touchend', cleanup);
+            document.removeEventListener('touchmove', cleanup);
+          };
+          
+          document.addEventListener('touchend', cleanup);
+          document.addEventListener('touchmove', cleanup);
+        }}
       >
         {children}
         
@@ -1325,6 +1462,20 @@ export default function Preview({
             />
           ))}
       </div>
+
+      {/* ContextMenu */}
+      {contextMenu.visible && contextMenu.elementId && (
+        <ContextMenu
+          selectedElement={contextMenu.elementId}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          isMobile={contextMenu.isMobile}
+          onClose={closeContextMenu}
+          onEdit={() => handleContextMenuAction('edit', contextMenu.elementId!)}
+          onDuplicate={() => handleContextMenuAction('duplicate', contextMenu.elementId!)}
+          onDelete={() => handleContextMenuAction('delete', contextMenu.elementId!)}
+          onSetLink={() => handleContextMenuAction('link', contextMenu.elementId!)}
+        />
+      )}
     </div>
     </div>
   );
