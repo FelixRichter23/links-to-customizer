@@ -80,14 +80,14 @@ const initialConfig: PageConfig = {
   desktop: {
     profile: {
       avatarUrl: "https://avatar.vercel.sh/your-name",
-      position: { x: 360, y: 100, width: 128, height: 128 },
+      position: { x: 386, y: 100, width: 128, height: 128 },
     },
     textElements: [
       {
         id: "profile-name",
         type: "text" as const,
         content: "Your Name",
-        position: { x: 240, y: 240, width: 368, height: 40 },
+        position: { x: 266, y: 240, width: 368, height: 40 },
         style: {
           fontSize: 28,
           fontWeight: "bold",
@@ -100,7 +100,7 @@ const initialConfig: PageConfig = {
         id: "profile-bio",
         type: "text" as const, 
         content: "Your short and catchy bio goes here!",
-        position: { x: 240, y: 285, width: 368, height: 30 },
+        position: { x: 266, y: 285, width: 368, height: 30 },
         style: {
           fontSize: 16,
           fontWeight: "normal",
@@ -116,14 +116,14 @@ const initialConfig: PageConfig = {
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 360, y: 340, width: 200, height: 50 }
+        position: { x: 350, y: 340, width: 200, height: 50 }
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 360, y: 410, width: 200, height: 50 }
+        position: { x: 350, y: 410, width: 200, height: 50 }
       },
     ],
   }
@@ -223,14 +223,14 @@ export default function EditorPage() {
   }, [isDragging, isResizing, dragStart, debugPosition, debugSize]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header mit View Toggle */}
+    <div className="min-h-screen bg-background text-foreground margin">
+      {/* header with toggle view */}
       <div className="bg-card border-b border-border p-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold">Link Editor</h1>
             
-            {/* Undo/Redo Toolbar */}
+            {/* Undo/Redo toolbar */}
             <UndoRedoToolbar
               canUndo={undoRedoActions.canUndo}
               canRedo={undoRedoActions.canRedo}
@@ -238,7 +238,7 @@ export default function EditorPage() {
               onRedo={undoRedoActions.redo}
             />
             
-            {/* Debug Button - nur für Entwickler */}
+            {/* Debug Button - dev only */}
             <button
               onClick={() => setShowDebugPanel(!showDebugPanel)}
               className="px-2 py-1 text-xs bg-muted hover:bg-accent rounded text-muted-foreground hover:text-accent-foreground transition-colors"

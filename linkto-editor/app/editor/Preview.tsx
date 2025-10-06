@@ -1195,13 +1195,15 @@ export default function Preview({
         {/* Desktop Mockup */}
         <div className="relative w-[900px] h-[600px] rounded-2xl border-[8px] border-gray-800 bg-gray-900 shadow-2xl overflow-hidden ring-2 ring-primary/50 ring-offset-4 ring-offset-background">
           {/* Desktop Chrome/Header */}
-          <div className="h-8 bg-gray-800 flex items-center px-4 gap-2">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <div className="h-8 bg-gray-800 flex items-center text-center px-4 gap-2 w-full">
+            <div className="flex">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              </div>
             </div>
-            <div className="flex-1 text-center text-xs text-gray-400">yoursite.com</div>
+            <div className="flex-1 text-center text-xs text-gray-400">linkto.com</div>
           </div>
 
           {/* Desktop Content */}
