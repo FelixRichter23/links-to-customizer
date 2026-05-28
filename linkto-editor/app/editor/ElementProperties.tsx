@@ -1,6 +1,6 @@
 // app/editor/ElementProperties.tsx
 import React from "react";
-import { type PageConfig, type TextElement } from "./types";
+import { type PageConfig, type TextElement, type Link } from "./types";
 
 interface ElementPropertiesProps {
   selectedElement: string | null;
@@ -82,17 +82,6 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
       maxY: constraints.container.height - height
     };
   };
-
-  if (!selectedElement) {
-    return (
-      <div className="bg-card border border-border rounded-lg p-2">
-        <h3 className="font-semibold mb-1 text-xs">Properties</h3>
-        <p className="text-xs text-muted-foreground text-center py-3">
-          Click on an element<br/>to edit it
-        </p>
-      </div>
-    );
-  }
 
   // Handler für TextElement Änderungen
   const handleTextElementChange = (elementId: string, property: string, value: string | number | boolean) => {
@@ -180,7 +169,7 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     } else if (property === 'avatarUrl') {
       newConfig[viewMode].profile.avatarUrl = value;
     }
-    setConfig(newConfig, 'avatar-change');
+    setConfig(newConfig, property === 'avatarUrl' ? 'text-change' : 'style-change');
   };
 
   // Handler für Link Änderungen
@@ -223,8 +212,22 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
         (newConfig[viewMode].links[linkIndex] as Record<string, string | number | boolean>)[property] = value;
       }
     }
-    setConfig(newConfig, 'link-change');
+    setConfig(newConfig, (property === 'title' || property === 'url') ? 'text-change' : 'style-change');
   };
+
+  // UI Helpers removed from inside to avoid recreating components on every render
+
+  if (!selectedElement) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-xl shadow-xl flex flex-col items-center justify-center text-center opacity-50">
+        <div className="w-12 h-12 rounded-full border border-dashed border-white/20 flex items-center justify-center mb-3">
+          <span className="text-white/30 text-xl">+</span>
+        </div>
+        <h3 className="font-medium text-sm text-foreground/80">No Element Selected</h3>
+        <p className="text-xs text-muted-foreground mt-1">Click an element to edit properties</p>
+      </div>
+    );
+  }
 
   // Avatar Properties
   if (selectedElement === 'avatar') {
@@ -233,254 +236,222 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     const maxPos = getMaxPositions('avatar', profile.position.width, profile.position.height);
     
     return (
-      <div className="bg-card border border-border rounded-lg p-2">
-        <h3 className="font-semibold mb-2 text-xs">Avatar</h3>
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs block mb-1">URL</label>
-            <input
-              type="url"
-              value={profile.avatarUrl}
-              onChange={(e) => handleAvatarChange('avatarUrl', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Position & Size</label>
-            <div className="grid grid-cols-4 gap-1">
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
-                <input
-                  type="number"
-                  min={constraints.avatar.minX}
-                  max={maxPos.maxX}
-                  value={profile.position.x}
-                  onChange={(e) => handleAvatarChange('position.x', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
-                <input
-                  type="number"
-                  min={constraints.avatar.minY}
-                  max={maxPos.maxY}
-                  value={profile.position.y}
-                  onChange={(e) => handleAvatarChange('position.y', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">W</label>
-                <input
-                  type="number"
-                  min={constraints.avatar.minWidth}
-                  max={constraints.avatar.maxWidth}
-                  value={profile.position.width}
-                  onChange={(e) => handleAvatarChange('position.width', parseInt(e.target.value) || 96)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">H</label>
-                <input
-                  type="number"
-                  min={constraints.avatar.minHeight}
-                  max={constraints.avatar.maxHeight}
-                  value={profile.position.height}
-                  onChange={(e) => handleAvatarChange('position.height', parseInt(e.target.value) || 96)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-            </div>
-          </div>
+      <PropertyCard title="Avatar" icon={<span className="text-xs">👤</span>}>
+        <div className="space-y-4">
+          <InputField 
+            label="Image URL" 
+            type="url" 
+            value={profile.avatarUrl} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAvatarChange('avatarUrl', e.target.value)} 
+          />
+          <PositionGrid 
+            x={profile.position.x} y={profile.position.y} w={profile.position.width} h={profile.position.height}
+            constraints={constraints.avatar} maxPos={maxPos}
+            onChange={(prop: string, val: string) => handleAvatarChange(`position.${prop}`, parseInt(val) || 0)}
+          />
         </div>
-      </div>
+      </PropertyCard>
     );
   }
 
   // TextElement Properties
   if (selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-'))) {
-    const textElement = currentViewport.textElements.find(el => el.id === selectedElement);
+    const textElement = currentViewport.textElements.find((el: TextElement) => el.id === selectedElement);
     if (!textElement) return null;
 
     const constraints = getConstraints();
     const maxPos = getMaxPositions('textElement', textElement.position.width, textElement.position.height);
     
     return (
-      <div className="bg-card border border-border rounded-lg p-2">
-        <h3 className="font-semibold mb-2 text-xs">Text Element</h3>
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs block mb-1">Content</label>
-            <input
-              type="text"
-              value={textElement.content}
-              onChange={(e) => handleTextElementChange(selectedElement, 'content', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-            />
-          </div>
-          
-          <div>
-            <label className="text-xs block mb-1">Font Size</label>
-            <input
-              type="number"
-              min="8"
-              max="72"
-              value={textElement.style.fontSize || 16}
-              onChange={(e) => handleTextElementChange(selectedElement, 'style.fontSize', parseInt(e.target.value) || 16)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Position & Size</label>
-            <div className="grid grid-cols-4 gap-1">
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
-                <input
-                  type="number"
-                  min={constraints.textElement.minX}
-                  max={maxPos.maxX}
-                  value={textElement.position.x}
-                  onChange={(e) => handleTextElementChange(selectedElement, 'position.x', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
-                <input
-                  type="number"
-                  min={constraints.textElement.minY}
-                  max={maxPos.maxY}
-                  value={textElement.position.y}
-                  onChange={(e) => handleTextElementChange(selectedElement, 'position.y', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">W</label>
-                <input
-                  type="number"
-                  min={constraints.textElement.minWidth}
-                  max={constraints.textElement.maxWidth}
-                  value={textElement.position.width}
-                  onChange={(e) => handleTextElementChange(selectedElement, 'position.width', parseInt(e.target.value) || 260)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">H</label>
-                <input
-                  type="number"
-                  min={constraints.textElement.minHeight}
-                  max={constraints.textElement.maxHeight}
-                  value={textElement.position.height}
-                  onChange={(e) => handleTextElementChange(selectedElement, 'position.height', parseInt(e.target.value) || 30)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
+      <PropertyCard title="Text Element" icon={<span className="text-xs">T</span>}>
+        <div className="space-y-4">
+          <InputField 
+            label="Content" 
+            type="text" 
+            value={textElement.content} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextElementChange(selectedElement, 'content', e.target.value)} 
+          />
+          <InputField 
+            label="Font Size" 
+            type="number" min="8" max="72"
+            value={textElement.style.fontSize || 16} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextElementChange(selectedElement, 'style.fontSize', parseInt(e.target.value) || 16)} 
+          />
+          <PositionGrid 
+            x={textElement.position.x} y={textElement.position.y} w={textElement.position.width} h={textElement.position.height}
+            constraints={constraints.textElement} maxPos={maxPos}
+            onChange={(prop: string, val: string) => handleTextElementChange(selectedElement, `position.${prop}`, parseInt(val) || 0)}
+          />
+          <div className="flex items-center justify-between p-1">
+            <label className="text-xs font-medium text-white/70">Text Color</label>
+            <div className="relative w-6 h-6 rounded-full overflow-hidden border border-white/20">
+              <input
+                type="color"
+                value={textElement.style.color || "#f2f7f7"}
+                onChange={(e) => handleTextElementChange(selectedElement, 'style.color', e.target.value)}
+                className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer"
+              />
             </div>
           </div>
         </div>
-      </div>
+      </PropertyCard>
     );
   }
 
   // Link Properties
   if (selectedElement && selectedElement.startsWith('link-')) {
     const linkId = parseInt(selectedElement.replace('link-', ''));
-    const link = currentViewport.links.find(l => l.id === linkId);
+    const link = currentViewport.links.find((l: Link) => l.id === linkId);
     if (!link) return null;
 
     const constraints = getConstraints();
     const maxPos = getMaxPositions('link', link.position.width, link.position.height);
     
     return (
-      <div className="bg-card border border-border rounded-lg p-2">
-        <h3 className="font-semibold mb-2 text-xs">Link</h3>
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs block mb-1">Title</label>
-            <input
-              type="text"
-              value={link.title}
-              onChange={(e) => handleLinkChange(linkId, 'title', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-            />
-          </div>
-          
-          <div>
-            <label className="text-xs block mb-1">URL</label>
-            <input
-              type="url"
-              value={link.url}
-              onChange={(e) => handleLinkChange(linkId, 'url', e.target.value)}
-              className="w-full bg-input p-1 rounded text-xs text-foreground placeholder:text-muted-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-            />
-          </div>
-          
-          <div className="space-y-1">
-            <label className="text-xs font-medium">Position & Size</label>
-            <div className="grid grid-cols-4 gap-1">
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">X</label>
-                <input
-                  type="number"
-                  min={constraints.link.minX}
-                  max={maxPos.maxX}
-                  value={link.position.x}
-                  onChange={(e) => handleLinkChange(linkId, 'position.x', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
+      <PropertyCard title="Link" icon={<span className="text-xs">🔗</span>}>
+        <div className="space-y-4">
+          <InputField 
+            label="Title" 
+            type="text" 
+            value={link.title} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLinkChange(linkId, 'title', e.target.value)} 
+          />
+          <InputField 
+            label="URL" 
+            type="url" 
+            value={link.url} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLinkChange(linkId, 'url', e.target.value)} 
+          />
+          <PositionGrid 
+            x={link.position.x} y={link.position.y} w={link.position.width} h={link.position.height}
+            constraints={constraints.link} maxPos={maxPos}
+            onChange={(prop: string, val: string) => handleLinkChange(linkId, `position.${prop}`, parseInt(val) || 0)}
+          />
+
+          {/* Button Styling */}
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            <label className="text-sm font-medium text-muted-foreground">Button Styling</label>
+            <div className="space-y-3 bg-black/20 p-3 rounded-xl border border-white/5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-white/70">Background</label>
+                <div className="relative w-6 h-6 rounded-full overflow-hidden border border-white/20">
+                  <input
+                    type="color"
+                    value={link.customColor || '#9fd2d1'}
+                    onChange={(e) => handleLinkChange(linkId, 'customColor', e.target.value)}
+                    className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">Y</label>
-                <input
-                  type="number"
-                  min={constraints.link.minY}
-                  max={maxPos.maxY}
-                  value={link.position.y}
-                  onChange={(e) => handleLinkChange(linkId, 'position.y', parseInt(e.target.value) || 0)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-white/70">Text Color</label>
+                <div className="relative w-6 h-6 rounded-full overflow-hidden border border-white/20">
+                  <input
+                    type="color"
+                    value={link.customTextColor || '#070c0e'}
+                    onChange={(e) => handleLinkChange(linkId, 'customTextColor', e.target.value)}
+                    className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">W</label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Border Radius</label>
+                  <span className="text-xs font-mono bg-white/10 px-1.5 py-0.5 rounded">{link.customBorderRadius ?? config.design.buttonBorderRadius}px</span>
+                </div>
                 <input
-                  type="number"
-                  min={constraints.link.minWidth}
-                  max={constraints.link.maxWidth}
-                  value={link.position.width}
-                  onChange={(e) => handleLinkChange(linkId, 'position.width', parseInt(e.target.value) || 260)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] block mb-0.5 text-muted-foreground">H</label>
-                <input
-                  type="number"
-                  min={constraints.link.minHeight}
-                  max={constraints.link.maxHeight}
-                  value={link.position.height}
-                  onChange={(e) => handleLinkChange(linkId, 'position.height', parseInt(e.target.value) || 40)}
-                  className="w-full bg-input p-0.5 rounded text-xs text-foreground border border-border focus:ring-1 focus:ring-ring outline-none"
+                  type="range"
+                  min="0"
+                  max="50"
+                  value={link.customBorderRadius ?? config.design.buttonBorderRadius}
+                  onChange={(e) => handleLinkChange(linkId, 'customBorderRadius', parseInt(e.target.value))}
+                  className="w-full accent-primary h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
                 />
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </PropertyCard>
     );
   }
 
-  return (
-    <div className="bg-card border border-border rounded-lg p-2">
-      <h3 className="font-semibold mb-1 text-xs">Properties</h3>
-      <p className="text-xs text-muted-foreground text-center py-3">
-        Unknown element type
-      </p>
-    </div>
-  );
+  return null;
 }
+
+// UI Helpers (Moved outside ElementProperties to prevent focus loss)
+const PropertyCard = ({ children, title, icon }: { children: React.ReactNode, title: string, icon?: React.ReactNode }) => (
+  <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xl shadow-xl transition-all duration-300">
+    <div className="flex items-center gap-2 mb-4">
+      {icon && <div className="p-1.5 bg-primary/20 rounded-lg text-primary">{icon}</div>}
+      <h3 className="font-semibold tracking-tight">{title}</h3>
+    </div>
+    {children}
+  </div>
+);
+
+interface InputFieldProps {
+  label: string;
+  type: string;
+  value: string | number;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  min?: string | number;
+  max?: string | number;
+}
+
+const InputField = ({ label, type, value, onChange, min, max }: InputFieldProps) => (
+  <div className="space-y-1.5">
+    <label className="text-xs font-medium text-muted-foreground">{label}</label>
+    <input
+      type={type}
+      min={min}
+      max={max}
+      value={value}
+      onChange={onChange}
+      className="w-full bg-black/20 p-2.5 rounded-xl text-sm text-foreground border border-white/5 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+    />
+  </div>
+);
+
+interface PositionGridProps {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  onChange: (prop: string, val: string) => void;
+  constraints: {
+    minX: number;
+    minWidth: number;
+    maxWidth: number;
+    minY: number;
+    minHeight: number;
+    maxHeight: number;
+  };
+  maxPos: {
+    maxX: number;
+    maxY: number;
+  };
+}
+
+const PositionGrid = ({ x, y, w, h, onChange, constraints, maxPos }: PositionGridProps) => (
+  <div className="space-y-2 pt-2">
+    <label className="text-sm font-medium text-muted-foreground">Position & Size</label>
+    <div className="grid grid-cols-4 gap-2">
+      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+        <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">X</label>
+        <input type="number" min={constraints.minX} max={maxPos.maxX} value={x} onChange={(e) => onChange('x', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
+      </div>
+      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+        <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">Y</label>
+        <input type="number" min={constraints.minY} max={maxPos.maxY} value={y} onChange={(e) => onChange('y', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
+      </div>
+      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+        <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">W</label>
+        <input type="number" min={constraints.minWidth} max={constraints.maxWidth} value={w} onChange={(e) => onChange('width', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
+      </div>
+      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+        <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">H</label>
+        <input type="number" min={constraints.minHeight} max={constraints.maxHeight} value={h} onChange={(e) => onChange('height', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
+      </div>
+    </div>
+  </div>
+);

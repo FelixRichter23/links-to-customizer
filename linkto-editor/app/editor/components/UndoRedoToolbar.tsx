@@ -18,37 +18,37 @@ export default function UndoRedoToolbar({ canUndo, canRedo, onUndo, onRedo }: Un
   const redoShortcut = isMac ? '⌘Y' : 'Ctrl+Y';
 
   return (
-    <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-2">
+    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5 backdrop-blur-xl shadow-xl">
       <button
         onClick={onUndo}
         disabled={!canUndo}
-        className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all ${
           canUndo
-            ? 'bg-background hover:bg-accent text-foreground hover:text-accent-foreground'
-            : 'bg-muted text-muted-foreground cursor-not-allowed'
+            ? 'bg-white/10 hover:bg-white/20 text-white'
+            : 'bg-white/5 text-white/30 cursor-not-allowed opacity-50'
         }`}
         title={`Undo (${undoShortcut})`}
       >
-        <Undo2 className="w-4 h-4" />
+        <Undo2 className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Undo</span>
       </button>
       
       <button
         onClick={onRedo}
         disabled={!canRedo}
-        className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-all ${
           canRedo
-            ? 'bg-background hover:bg-accent text-foreground hover:text-accent-foreground'
-            : 'bg-muted text-muted-foreground cursor-not-allowed'
+            ? 'bg-white/10 hover:bg-white/20 text-white'
+            : 'bg-white/5 text-white/30 cursor-not-allowed opacity-50'
         }`}
         title={`Redo (${redoShortcut})`}
       >
-        <Redo2 className="w-4 h-4" />
+        <Redo2 className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Redo</span>
       </button>
       
       {/* Keyboard Shortcut Hinweis */}
-      <div className="hidden lg:block text-xs text-muted-foreground border-l border-border pl-3 ml-1">
+      <div className="hidden lg:block text-[10px] uppercase tracking-wider text-white/40 border-l border-white/10 pl-3 ml-1">
         {undoShortcut} / {redoShortcut}
       </div>
     </div>

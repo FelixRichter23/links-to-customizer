@@ -5,7 +5,7 @@ import ContextMenu from "./ContextMenu";
 
 interface PreviewProps {
   config: PageConfig;
-  setConfig?: (config: PageConfig) => void;
+  setConfig?: (config: PageConfig, actionType?: string) => void;
   viewMode: 'mobile' | 'desktop';
   selectedElement?: string | null;
   setSelectedElement?: (elementId: string | null) => void;
@@ -970,6 +970,9 @@ export default function Preview({
     };
 
     const handleMouseUp = () => {
+      if (isDragging || isResizing) {
+        setConfig(config, 'drag-end');
+      }
       setIsDragging(false);
       setIsResizing(false);
       setAlignmentGuides([]); // Guides verstecken wenn Aktion beendet
@@ -983,13 +986,13 @@ export default function Preview({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, selectedElement, dragStart, resizeStart, isInteractive, setConfig]);
+  }, [isDragging, isResizing, selectedElement, dragStart, resizeStart, isInteractive, setConfig, config]);
 
   // Update Element Position
-  const updateElementPosition = (elementId: string, updates: Partial<ElementPosition>) => {
+  const updateElementPosition = (elementId: string, updates: Partial<ElementPosition>, actionType: string = 'drag') => {
     if (!setConfig) return;
 
-    const newConfig = { ...config };
+    const newConfig: PageConfig = JSON.parse(JSON.stringify(config));
     
     // Runde alle Pixel-Werte auf ganze Zahlen
     const roundedUpdates = {
@@ -1034,7 +1037,7 @@ export default function Preview({
       }
     }
 
-    setConfig(newConfig);
+    setConfig(newConfig, actionType);
   };  // Background Click Handler
   const handleBackgroundClick = () => {
     if (!isInteractive || !setSelectedElement) return;
@@ -1225,7 +1228,7 @@ export default function Preview({
               <img
                 src={profile.avatarUrl}
                 alt="Avatar"
-                className="w-full h-full rounded-full object-cover border-4 border-white shadow-lg pointer-events-none"
+                className="w-full h-full rounded-full object-cover border-[4px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
               />
             </SelectionBox>
 
@@ -1245,7 +1248,7 @@ export default function Preview({
                   }}
                 >
                   <div 
-                    className="pointer-events-none h-full flex items-center justify-center px-2"
+                    className="pointer-events-none h-full flex items-center px-2 drop-shadow-sm"
                     style={{
                       color: textElement.style.color || design.textColor,
                       fontFamily: textElement.style.fontFamily || 'inherit',
@@ -1258,6 +1261,9 @@ export default function Preview({
                       letterSpacing: textElement.style.letterSpacing ? `${textElement.style.letterSpacing}px` : 'normal',
                       textShadow: textElement.style.textShadow || 'none',
                       opacity: textElement.style.opacity || 1,
+                      justifyContent: 
+                        textElement.style.textAlign === 'left' ? 'flex-start' :
+                        textElement.style.textAlign === 'right' ? 'flex-end' : 'center',
                     }}
                   >
                     {textElement.content}
@@ -1284,15 +1290,23 @@ export default function Preview({
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex w-full h-full text-center font-semibold transition-all hover:scale-105 hover:shadow-lg pointer-events-none items-center justify-center"
+                    className="flex w-full h-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] pointer-events-none items-center overflow-hidden relative group px-4"
                     style={{
-                      backgroundColor: link.customColor || design.buttonColor,
-                      color: link.customTextColor || design.buttonTextColor,
-                      borderRadius: `${link.customBorderRadius || design.buttonBorderRadius}px`,
+                      backgroundColor: link.customColor || '#9fd2d1',
+                      color: link.customTextColor || '#070c0e',
+                      borderRadius: `${link.customBorderRadius ?? design.buttonBorderRadius}px`,
                       fontSize: link.fontSize || 16,
+                      fontFamily: link.fontStyle?.fontFamily || 'inherit',
+                      fontWeight: link.fontStyle?.fontWeight || 'semibold',
+                      textTransform: link.fontStyle?.textTransform || 'none',
+                      textDecoration: link.fontStyle?.textDecoration || 'none',
+                      justifyContent: 
+                        link.fontStyle?.textAlign === 'left' ? 'flex-start' :
+                        link.fontStyle?.textAlign === 'right' ? 'flex-end' : 'center',
                     }}
                   >
-                    {link.title}
+                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <span className="relative z-10">{link.title}</span>
                   </a>
                 </SelectionBox>
               ))}
@@ -1362,7 +1376,7 @@ export default function Preview({
           <img
             src={profile.avatarUrl}
             alt="Avatar"
-            className="w-full h-full rounded-full object-cover border-2 border-white pointer-events-none"
+            className="w-full h-full rounded-full object-cover border-[3px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
           />
         </SelectionBox>
 
@@ -1381,8 +1395,8 @@ export default function Preview({
                 height: textElement.position.height,
               }}
             >
-              <div 
-                className="pointer-events-none h-full flex items-center justify-center px-2"
+             <div 
+                className="pointer-events-none h-full flex items-center px-2 drop-shadow-sm"
                 style={{
                   color: textElement.style.color || design.textColor,
                   fontFamily: textElement.style.fontFamily || 'inherit',
@@ -1395,6 +1409,9 @@ export default function Preview({
                   letterSpacing: textElement.style.letterSpacing ? `${textElement.style.letterSpacing}px` : 'normal',
                   textShadow: textElement.style.textShadow || 'none',
                   opacity: textElement.style.opacity || 1,
+                  justifyContent: 
+                    textElement.style.textAlign === 'left' ? 'flex-start' :
+                    textElement.style.textAlign === 'right' ? 'flex-end' : 'center',
                 }}
               >
                 {textElement.content}
@@ -1421,15 +1438,23 @@ export default function Preview({
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-full h-full text-center font-semibold transition-transform hover:scale-105 pointer-events-none items-center justify-center"
+                className="flex w-full h-full transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] pointer-events-none items-center overflow-hidden relative group px-4"
                 style={{
-                  backgroundColor: link.customColor || design.buttonColor,
-                  color: link.customTextColor || design.buttonTextColor,
-                  borderRadius: `${link.customBorderRadius || design.buttonBorderRadius}px`,
+                  backgroundColor: link.customColor || '#9fd2d1',
+                  color: link.customTextColor || '#070c0e',
+                  borderRadius: `${link.customBorderRadius ?? design.buttonBorderRadius}px`,
                   fontSize: link.fontSize || 14,
+                  fontFamily: link.fontStyle?.fontFamily || 'inherit',
+                  fontWeight: link.fontStyle?.fontWeight || 'semibold',
+                  textTransform: link.fontStyle?.textTransform || 'none',
+                  textDecoration: link.fontStyle?.textDecoration || 'none',
+                  justifyContent: 
+                    link.fontStyle?.textAlign === 'left' ? 'flex-start' :
+                    link.fontStyle?.textAlign === 'right' ? 'flex-end' : 'center',
                 }}
               >
-                {link.title}
+                <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <span className="relative z-10">{link.title}</span>
               </a>
             </SelectionBox>
           ))}

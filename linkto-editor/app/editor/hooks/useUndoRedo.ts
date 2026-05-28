@@ -26,22 +26,20 @@ export function useUndoRedo<T>(
     currentIndex: 0,
   });
 
-  // Debouncing für Text-Änderungen
-  const textDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingTextStateRef = useRef<T | null>(null);
+  // This is the current state that the UI renders
+  const [present, setPresent] = useState<T>(initialState);
 
-  const currentState = pendingTextStateRef.current || state.history[state.currentIndex];
+  const textDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const canUndo = state.currentIndex > 0;
   const canRedo = state.currentIndex < state.history.length - 1;
 
-  // Hilfsfunktion zum tatsächlichen Hinzufügen zum History
+  // Adds a state to the history, truncating any future history (if we undid before)
   const addToHistory = useCallback((newState: T) => {
     setState(prevState => {
       const newHistory = prevState.history.slice(0, prevState.currentIndex + 1);
       newHistory.push(newState);
       
-      // Limit history size
       if (newHistory.length > maxHistorySize) {
         newHistory.shift();
         return {
@@ -57,79 +55,85 @@ export function useUndoRedo<T>(
     });
   }, [maxHistorySize]);
 
-  // Commit pending text changes
   const commitPendingText = useCallback(() => {
-    if (pendingTextStateRef.current) {
-      addToHistory(pendingTextStateRef.current);
-      pendingTextStateRef.current = null;
-    }
     if (textDebounceTimeoutRef.current) {
       clearTimeout(textDebounceTimeoutRef.current);
       textDebounceTimeoutRef.current = null;
+      // We assume present state has the latest text
+      setPresent(current => {
+        addToHistory(current);
+        return current;
+      });
     }
   }, [addToHistory]);
 
   const pushState = useCallback((newState: T, actionType?: string) => {
-    // Text-Änderungen debouncing (1000ms Verzögerung)
-    if (actionType === 'text-change') {
-      // Speichere den pending State für sofortige UI Updates
-      pendingTextStateRef.current = newState;
-      
-      // Lösche vorherigen Timeout
+    // Always update what the UI sees immediately
+    setPresent(newState);
+
+    if (actionType === 'drag') {
+      // Do not add to history yet. The UI will just use the new `present` state.
+      // A subsequent action like 'drag-end' will commit it.
+      return;
+    }
+
+    if (actionType === 'text-change' || actionType === 'style-change') {
       if (textDebounceTimeoutRef.current) {
         clearTimeout(textDebounceTimeoutRef.current);
       }
-      
-      // Setze neuen Timeout
       textDebounceTimeoutRef.current = setTimeout(() => {
-        if (pendingTextStateRef.current) {
-          addToHistory(pendingTextStateRef.current);
-          pendingTextStateRef.current = null;
-        }
-      }, 1000);
-      
-      return; // Nicht sofort zur History hinzufügen
+        addToHistory(newState);
+        textDebounceTimeoutRef.current = null;
+      }, 800);
+      return;
     }
 
-    // Commit any pending text changes first
-    commitPendingText();
-    
-    // Für alle anderen Änderungen: sofort zur History hinzufügen
-    addToHistory(newState);
-  }, [addToHistory, commitPendingText]);
-
-  const undo = useCallback(() => {
-    // Commit any pending text changes first
-    commitPendingText();
-    
-    if (canUndo) {
-      setState(prevState => ({
-        ...prevState,
-        currentIndex: prevState.currentIndex - 1,
-      }));
-    }
-  }, [canUndo, commitPendingText]);
-
-  const redo = useCallback(() => {
-    // Commit any pending text changes first
-    commitPendingText();
-    
-    if (canRedo) {
-      setState(prevState => ({
-        ...prevState,
-        currentIndex: prevState.currentIndex + 1,
-      }));
-    }
-  }, [canRedo, commitPendingText]);
-
-  const reset = useCallback((newInitialState: T) => {
-    // Clear any pending changes
+    // Commit any pending text changes first before an explicit push
     if (textDebounceTimeoutRef.current) {
       clearTimeout(textDebounceTimeoutRef.current);
       textDebounceTimeoutRef.current = null;
     }
-    pendingTextStateRef.current = null;
     
+    // Default: immediately add to history (e.g. 'drag-end', structural changes)
+    addToHistory(newState);
+  }, [addToHistory]);
+
+  const undo = useCallback(() => {
+    commitPendingText();
+    
+    if (canUndo) {
+      setState(prevState => {
+        const newIndex = prevState.currentIndex - 1;
+        setPresent(prevState.history[newIndex]);
+        return {
+          ...prevState,
+          currentIndex: newIndex,
+        };
+      });
+    }
+  }, [canUndo, commitPendingText]);
+
+  const redo = useCallback(() => {
+    commitPendingText();
+    
+    if (canRedo) {
+      setState(prevState => {
+        const newIndex = prevState.currentIndex + 1;
+        setPresent(prevState.history[newIndex]);
+        return {
+          ...prevState,
+          currentIndex: newIndex,
+        };
+      });
+    }
+  }, [canRedo, commitPendingText]);
+
+  const reset = useCallback((newInitialState: T) => {
+    if (textDebounceTimeoutRef.current) {
+      clearTimeout(textDebounceTimeoutRef.current);
+      textDebounceTimeoutRef.current = null;
+    }
+    setPresent(newInitialState);
     setState({
       history: [newInitialState],
       currentIndex: 0,
@@ -137,11 +141,11 @@ export function useUndoRedo<T>(
   }, []);
 
   const getCurrentState = useCallback(() => {
-    return currentState;
-  }, [currentState]);
+    return present;
+  }, [present]);
 
   return [
-    currentState,
+    present,
     {
       canUndo,
       canRedo,

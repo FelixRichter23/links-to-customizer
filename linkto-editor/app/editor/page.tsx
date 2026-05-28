@@ -8,8 +8,8 @@ import ElementProperties from "./ElementProperties";
 import UndoRedoToolbar from "./components/UndoRedoToolbar";
 import CustomizerToolbar from "./CustomizerToolbar";
 import { useUndoRedo } from "./hooks/useUndoRedo";
-import { type PageConfig } from "./types";
-import { Download } from "lucide-react";
+import { type PageConfig, type ViewportConfig } from "./types";
+import { Download, Settings } from "lucide-react";
 
 // Startkonfiguration für den Editor
 const initialConfig: PageConfig = {
@@ -130,23 +130,69 @@ const initialConfig: PageConfig = {
 };
 
 export default function EditorPage() {
-  // Undo/Redo System für Config
-  const [config, undoRedoActions] = useUndoRedo<PageConfig>(initialConfig, 10);
-  
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
 
-  // Wrapper für setConfig, der automatisch im Undo/Redo-Stack speichert
+  // Separate mobile and desktop state stacks
+  const [mobileState, mobileActions] = useUndoRedo<{ design: PageConfig['design']; viewport: ViewportConfig }>({
+    design: initialConfig.design,
+    viewport: initialConfig.mobile
+  }, 10);
+
+  const [desktopState, desktopActions] = useUndoRedo<{ design: PageConfig['design']; viewport: ViewportConfig }>({
+    design: initialConfig.design,
+    viewport: initialConfig.desktop
+  }, 10);
+
+  const activeActions = viewMode === 'mobile' ? mobileActions : desktopActions;
+  const activeState = viewMode === 'mobile' ? mobileState : desktopState;
+
+  // Construct current unified PageConfig
+  const config: PageConfig = {
+    design: activeState.design,
+    mobile: mobileState.viewport,
+    desktop: desktopState.viewport
+  };
+
+  // Sync design between layouts when active design changes (e.g. on undo/redo)
+  useEffect(() => {
+    const inactiveActions = viewMode === 'mobile' ? desktopActions : mobileActions;
+    const inactiveState = viewMode === 'mobile' ? desktopState : mobileState;
+
+    if (JSON.stringify(activeState.design) !== JSON.stringify(inactiveState.design)) {
+      // Sync present state design to inactive stack without recording history (style-change is debounced)
+      inactiveActions.pushState({
+        design: activeState.design,
+        viewport: inactiveState.viewport
+      }, 'style-change');
+    }
+  }, [activeState.design, viewMode]);
+
+  // Wrapper for setConfig, which targets the correct stack
   const setConfig = (
     newConfig: PageConfig | ((prevConfig: PageConfig) => PageConfig), 
     actionType?: string
   ) => {
-    if (typeof newConfig === 'function') {
-      const updatedConfig = newConfig(config);
-      undoRedoActions.pushState(updatedConfig);
-    } else {
-      undoRedoActions.pushState(newConfig);
+    const resolvedConfig = typeof newConfig === 'function' ? newConfig(config) : newConfig;
+    
+    // Update active stack
+    activeActions.pushState({
+      design: resolvedConfig.design,
+      viewport: resolvedConfig[viewMode]
+    }, actionType);
+
+    // If design changed, also update design in inactive stack immediately
+    const inactiveActions = viewMode === 'mobile' ? desktopActions : mobileActions;
+    const inactiveState = viewMode === 'mobile' ? desktopState : mobileState;
+    const designChanged = JSON.stringify(resolvedConfig.design) !== JSON.stringify(inactiveState.design);
+    
+    if (designChanged) {
+      inactiveActions.pushState({
+        design: resolvedConfig.design,
+        viewport: inactiveState.viewport
+      }, actionType);
     }
   };
   
@@ -223,95 +269,150 @@ export default function EditorPage() {
   }, [isDragging, isResizing, dragStart, debugPosition, debugSize]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header mit View Toggle */}
-      <div className="bg-card border-b border-border p-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold">Link Editor</h1>
+    <div className="min-h-screen bg-[#0A0A0A] text-foreground flex flex-col font-sans selection:bg-primary/30">
+      {/* Header mit View Toggle - Glassmorphic */}
+      <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-background/70 border-b border-border/50 shadow-sm">
+        <div className="container mx-auto px-4 h-16 flex justify-between items-center">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
+                <span className="text-white font-bold text-lg leading-none">L</span>
+              </div>
+              <h1 className="text-xl font-bold tracking-tight">LinkTo</h1>
+            </div>
+            
+            <div className="h-6 w-px bg-border/50 hidden sm:block"></div>
             
             {/* Undo/Redo Toolbar */}
-            <UndoRedoToolbar
-              canUndo={undoRedoActions.canUndo}
-              canRedo={undoRedoActions.canRedo}
-              onUndo={undoRedoActions.undo}
-              onRedo={undoRedoActions.redo}
-            />
-            
-            {/* Debug Button - nur für Entwickler */}
+            <div className="hidden sm:block">
+              <UndoRedoToolbar
+                canUndo={activeActions.canUndo}
+                canRedo={activeActions.canRedo}
+                onUndo={activeActions.undo}
+                onRedo={activeActions.redo}
+              />
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Settings Cog Button */}
+            <button
+              onClick={() => setShowGlobalSettings(!showGlobalSettings)}
+              className={`p-2 rounded-full border border-border/50 transition-all ${
+                showGlobalSettings 
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
+                  : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+              title="Toggle Global Design Panel"
+            >
+              <Settings size={16} />
+            </button>
+
+            {/* Debug Button */}
             <button
               onClick={() => setShowDebugPanel(!showDebugPanel)}
-              className="px-2 py-1 text-xs bg-muted hover:bg-accent rounded text-muted-foreground hover:text-accent-foreground transition-colors"
+              className="px-3 py-1.5 text-xs font-medium bg-muted/50 hover:bg-muted border border-border/50 rounded-full text-muted-foreground hover:text-foreground transition-all"
               title="Toggle Debug Panel"
             >
               Debug
             </button>
-          </div>
-          
-          {/* Modern Toggle Switch */}
-          <div className="flex items-center gap-3">
-            <span className={`text-sm transition-colors ${viewMode === 'mobile' ? 'text-foreground' : 'text-muted-foreground'}`}>
-              Mobile
-            </span>
-            <button
-              onClick={() => setViewMode(viewMode === 'mobile' ? 'desktop' : 'mobile')}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background ${
-                viewMode === 'desktop' ? 'bg-primary' : 'bg-muted'
-              }`}
-              role="switch"
-              aria-checked={viewMode === 'desktop'}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
-                  viewMode === 'desktop' ? 'translate-x-6' : 'translate-x-1'
+
+            {/* Modern Toggle Switch */}
+            <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-full border border-border/50">
+              <button
+                onClick={() => setViewMode('mobile')}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 ${
+                  viewMode === 'mobile' 
+                    ? 'bg-background shadow-sm text-foreground ring-1 ring-border/50' 
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
-              />
-            </button>
-            <span className={`text-sm transition-colors ${viewMode === 'desktop' ? 'text-foreground' : 'text-muted-foreground'}`}>
-              Desktop
-            </span>
+              >
+                Mobile
+              </button>
+              <button
+                onClick={() => setViewMode('desktop')}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 ${
+                  viewMode === 'desktop' 
+                    ? 'bg-background shadow-sm text-foreground ring-1 ring-border/50' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Desktop
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Haupt-Layout - responsiv basierend auf View Mode */}
-      <div className={`gap-6 p-6 transition-all duration-300 ${
-        viewMode === 'desktop' 
-          ? 'grid grid-cols-1 xl:grid-cols-3' // Desktop: 2-Spalten Layout (Controls mit Properties - Preview)
-          : 'grid grid-cols-1 lg:grid-cols-2'  // Mobile: 2-Spalten Layout
-      }`}>
-        {/* Linke Spalte: Steuerung + Properties */}
-        <div className={`transition-all duration-300 ${
-          viewMode === 'desktop' ? 'xl:col-span-1' : 'lg:col-span-1'
+      <div className="flex-1 w-full max-w-[1600px] mx-auto p-4 sm:p-6 md:p-8">
+        <div className={`gap-8 transition-all duration-500 ease-in-out ${
+          viewMode === 'desktop' 
+            ? 'grid grid-cols-1 xl:grid-cols-4' 
+            : 'grid grid-cols-1 lg:grid-cols-12'
         }`}>
+          {/* Linke Spalte: Steuerung + Properties */}
+          <div className={`flex flex-col gap-6 transition-all duration-500 ${
+            viewMode === 'desktop' ? 'xl:col-span-1' : 'lg:col-span-4 xl:col-span-3'
+          }`}>
           <div className={`space-y-4 transition-all duration-300 ${
             viewMode === 'desktop' 
               ? 'max-w-sm mx-auto xl:max-w-none' // Desktop: Schmaler
               : 'max-w-none' // Mobile: Normale Breite
           }`}>
             {/* Properties Panel über Controls (beide Modi) */}
-            <ElementProperties
+             <ElementProperties
               selectedElement={selectedElement}
               config={config}
               setConfig={setConfig}
               viewMode={viewMode}
             />
             
-            <Controls config={config} setConfig={setConfig} compact={viewMode === 'desktop'} viewMode={viewMode} />
+            {showGlobalSettings && (
+              <Controls config={config} setConfig={setConfig} compact={viewMode === 'desktop'} viewMode={viewMode} />
+            )}
           </div>
         </div>
 
         {/* Rechte Spalte: Vorschau */}
-        <div className={`flex flex-col justify-start items-center transition-all duration-300 ${
-          viewMode === 'desktop' ? 'xl:col-span-2' : 'lg:col-span-1'
+        <div className={`flex flex-col justify-start items-center transition-all duration-500 ease-in-out relative ${
+          viewMode === 'desktop' ? 'xl:col-span-3' : 'lg:col-span-8 xl:col-span-9'
         }`}>
+          {/* Subtle dot background pattern */}
+          <div className="absolute inset-0 z-0 bg-[radial-gradient(#ffffff1a_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-50 [mask-image:linear-gradient(to_bottom,black,transparent)]"></div>
+
           {/* Preview Container mit integrierter CustomizerToolbar */}
-          <div className="w-full flex justify-center relative">
+          <div className="w-full flex justify-center relative z-10">
             {/* CustomizerToolbar - schwebt über dem Preview */}
             {selectedElement && (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-') || selectedElement.startsWith('link-')) && (
               <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-50">
                 <CustomizerToolbar
                 selectedElement={selectedElement}
+                currentColor={
+                  selectedElement.startsWith('link-')
+                    ? (config[viewMode].links.find(l => `link-${l.id}` === selectedElement)?.customTextColor || config.design.buttonTextColor)
+                    : (config[viewMode].textElements.find(t => t.id === selectedElement)?.style.color || config.design.textColor)
+                }
+                currentFont={
+                  selectedElement.startsWith('link-')
+                    ? (config[viewMode].links.find(l => `link-${l.id}` === selectedElement)?.fontStyle?.fontFamily || 'Arial')
+                    : (config[viewMode].textElements.find(t => t.id === selectedElement)?.style.fontFamily || 'Arial')
+                }
+                currentFontWeight={
+                  selectedElement.startsWith('link-')
+                    ? (config[viewMode].links.find(l => `link-${l.id}` === selectedElement)?.fontStyle?.fontWeight || 'normal')
+                    : (config[viewMode].textElements.find(t => t.id === selectedElement)?.style.fontWeight || 'normal')
+                }
+                currentTextDecoration={
+                  selectedElement.startsWith('link-')
+                    ? (config[viewMode].links.find(l => `link-${l.id}` === selectedElement)?.fontStyle?.textDecoration || 'none')
+                    : (config[viewMode].textElements.find(t => t.id === selectedElement)?.style.textDecoration || 'none')
+                }
+                currentTextAlign={
+                  selectedElement.startsWith('link-')
+                    ? (config[viewMode].links.find(l => `link-${l.id}` === selectedElement)?.fontStyle?.textAlign || 'center')
+                    : (config[viewMode].textElements.find(t => t.id === selectedElement)?.style.textAlign || 'center')
+                }
                 onColorChange={(color) => {
                   if (selectedElement.startsWith('profile-') || selectedElement.startsWith('text-')) {
                     // Handle TextElements
@@ -331,7 +432,7 @@ export default function EditorPage() {
                             : element
                         )
                       }
-                    }));
+                    }), 'style-change');
                   } else if (selectedElement.startsWith('link-')) {
                     // Handle Links
                     const linkId = parseInt(selectedElement.replace('link-', ''));
@@ -343,15 +444,12 @@ export default function EditorPage() {
                           link.id === linkId
                             ? { 
                                 ...link, 
-                                fontStyle: {
-                                  ...link.fontStyle,
-                                  color: color
-                                }
+                                customTextColor: color
                               }
                             : link
                         )
                       }
-                    }));
+                    }), 'style-change');
                   }
                 }}
                 onFontChange={(font) => {
@@ -370,6 +468,25 @@ export default function EditorPage() {
                                 }
                               }
                             : element
+                        )
+                      }
+                    }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  fontFamily: font
+                                }
+                              }
+                            : link
                         )
                       }
                     }));
@@ -394,6 +511,25 @@ export default function EditorPage() {
                         )
                       }
                     }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  fontWeight: weight
+                                }
+                              }
+                            : link
+                        )
+                      }
+                    }));
                   }
                 }}
                 onTextAlignChange={(align) => {
@@ -412,6 +548,25 @@ export default function EditorPage() {
                                 }
                               }
                             : element
+                        )
+                      }
+                    }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  textAlign: align as 'left' | 'center' | 'right'
+                                }
+                              }
+                            : link
                         )
                       }
                     }));
@@ -436,6 +591,25 @@ export default function EditorPage() {
                         )
                       }
                     }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  textTransform: transform as 'none' | 'uppercase' | 'lowercase' | 'capitalize'
+                                }
+                              }
+                            : link
+                        )
+                      }
+                    }));
                   }
                 }}
                 onTextDecorationChange={(decoration) => {
@@ -457,6 +631,25 @@ export default function EditorPage() {
                         )
                       }
                     }));
+                  } else if (selectedElement.startsWith('link-')) {
+                    const linkId = parseInt(selectedElement.replace('link-', ''));
+                    setConfig(prev => ({
+                      ...prev,
+                      [viewMode]: {
+                        ...prev[viewMode],
+                        links: prev[viewMode].links.map(link =>
+                          link.id === linkId
+                            ? { 
+                                ...link, 
+                                fontStyle: {
+                                  ...link.fontStyle,
+                                  textDecoration: decoration as 'none' | 'underline' | 'overline' | 'line-through'
+                                }
+                              }
+                            : link
+                        )
+                      }
+                    }));
                   }
                 }}
               />
@@ -475,6 +668,7 @@ export default function EditorPage() {
           </div>
         </div>
       </div>
+    </div>
 
       {/* Debug Panel als verschiebbares Fenster */}
       {showDebugPanel && (

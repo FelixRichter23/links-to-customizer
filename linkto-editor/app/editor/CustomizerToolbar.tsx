@@ -18,6 +18,11 @@ import {
 
 interface CustomizerToolbarProps {
   selectedElement?: string | null;
+  currentColor?: string;
+  currentFont?: string;
+  currentFontWeight?: string;
+  currentTextDecoration?: string;
+  currentTextAlign?: string;
   onColorChange?: (color: string) => void;
   onFontChange?: (font: string) => void;
   onTextTransformChange?: (transform: string) => void;
@@ -28,6 +33,7 @@ interface CustomizerToolbarProps {
 }
 
 const FONT_OPTIONS = [
+  { value: 'inherit', label: 'Default (Inter)' },
   { value: 'Arial', label: 'Arial' },
   { value: 'Helvetica', label: 'Helvetica' },
   { value: 'Times New Roman', label: 'Times' },
@@ -37,12 +43,17 @@ const FONT_OPTIONS = [
 ];
 
 const PREDEFINED_COLORS = [
-  '#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff',
-  '#ffff00', '#ff00ff', '#00ffff', '#808080', '#ffa500'
+  '#000000', '#ffffff', '#ff3b30', '#34c759', '#007aff',
+  '#ffcc00', '#ff2d55', '#5ac8fa', '#8e8e93', '#ff9500'
 ];
 
 export default function CustomizerToolbar({
   selectedElement,
+  currentColor,
+  currentFont,
+  currentFontWeight,
+  currentTextDecoration,
+  currentTextAlign,
   onColorChange,
   onFontChange,
   onTextTransformChange,
@@ -54,11 +65,20 @@ export default function CustomizerToolbar({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showFontDropdown, setShowFontDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [selectedColor, setSelectedColor] = useState("#000000");
-  const [selectedFont, setSelectedFont] = useState("Arial");
-  const [textAlign, setTextAlign] = useState("left");
-  const [fontWeight, setFontWeight] = useState("normal");
-  const [textDecoration, setTextDecoration] = useState("none");
+  const [selectedColor, setSelectedColor] = useState(currentColor || "#ffffff");
+  const [selectedFont, setSelectedFont] = useState(currentFont || "inherit");
+  const [textAlign, setTextAlign] = useState(currentTextAlign || "left");
+  const [fontWeight, setFontWeight] = useState(currentFontWeight || "normal");
+  const [textDecoration, setTextDecoration] = useState(currentTextDecoration || "none");
+
+  // Sync state when props change
+  React.useEffect(() => {
+    if (currentColor) setSelectedColor(currentColor);
+    if (currentFont) setSelectedFont(currentFont);
+    if (currentTextAlign) setTextAlign(currentTextAlign);
+    if (currentFontWeight) setFontWeight(currentFontWeight);
+    if (currentTextDecoration) setTextDecoration(currentTextDecoration);
+  }, [currentColor, currentFont, currentTextAlign, currentFontWeight, currentTextDecoration]);
 
   // Wenn kein Element selektiert ist, zeige die Toolbar nicht
   if (!selectedElement) {
@@ -95,38 +115,37 @@ export default function CustomizerToolbar({
   };
 
   return (
-    <div className={`bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg max-w-fit ${className}`}>
-      <div className="flex items-center gap-1 px-2 py-1.5 h-8 sm:h-10 sm:px-3">
-        {/* Element Label - Hidden on mobile for space */}
-        <div className="hidden sm:flex items-center gap-2 pr-3 border-r border-border/30">
-          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-          <span className="text-xs font-medium text-muted-foreground">
+    <div className={`bg-white/5 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl p-1.5 max-w-fit flex items-center transition-all ${className}`}>
+      <div className="flex items-center gap-1 sm:gap-2 px-1">
+        {/* Element Label */}
+        <div className="hidden sm:flex items-center gap-2 pr-3 border-r border-white/10">
+          <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]"></div>
+          <span className="text-xs font-medium text-white/70 capitalize">
             {selectedElement.replace(/^(profile-|text-|link-)/, '').replace(/-/g, ' ')}
           </span>
         </div>
 
-        {/* Mobile: Compact Color Picker */}
+        {/* Color Picker */}
         <div className="relative">
           <button
-            onClick={() => setShowColorPicker(!showColorPicker)}
-            className="flex items-center gap-1 px-1.5 py-1 text-xs hover:bg-muted/50 rounded transition-colors sm:px-2"
+            onClick={() => { setShowColorPicker(!showColorPicker); setShowFontDropdown(false); }}
+            className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 hover:bg-white/10 rounded-full transition-colors"
             title="Text Color"
           >
-            <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <div 
-              className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded border border-border/30"
+              className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border border-white/20 shadow-inner"
               style={{ backgroundColor: selectedColor }}
             />
           </button>
           
           {showColorPicker && (
-            <div className="absolute top-full mt-1 left-0 bg-background border border-border rounded-lg shadow-lg p-2 z-60">
-              <div className="grid grid-cols-5 gap-1 mb-2">
+            <div className="absolute top-full mt-3 left-0 bg-black/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl p-3 z-60 w-44 animate-in fade-in zoom-in-95 duration-200">
+              <div className="grid grid-cols-5 gap-2 mb-3">
                 {PREDEFINED_COLORS.map((color) => (
                   <button
                     key={color}
                     onClick={() => handleColorChange(color)}
-                    className="w-6 h-6 rounded border border-border/30 hover:scale-110 transition-transform"
+                    className="w-6 h-6 rounded-full border border-white/10 hover:scale-110 transition-transform shadow-sm cursor-pointer"
                     style={{ backgroundColor: color }}
                     title={color}
                   />
@@ -136,31 +155,31 @@ export default function CustomizerToolbar({
                 type="color"
                 value={selectedColor}
                 onChange={(e) => handleColorChange(e.target.value)}
-                className="w-full h-6 rounded border border-border/30 cursor-pointer"
+                className="w-full h-8 rounded-lg border border-white/10 cursor-pointer bg-transparent p-0 block outline-none"
               />
             </div>
           )}
         </div>
 
-        {/* Mobile: Compact Font Family */}
+        {/* Font Family */}
         <div className="relative">
           <button
-            onClick={() => setShowFontDropdown(!showFontDropdown)}
-            className="flex items-center gap-1 px-1.5 py-1 text-xs hover:bg-muted/50 rounded transition-colors sm:px-2"
+            onClick={() => { setShowFontDropdown(!showFontDropdown); setShowColorPicker(false); }}
+            className="flex items-center gap-2 px-3 h-8 sm:h-9 hover:bg-white/10 rounded-full transition-colors text-white/80"
             title="Font Family"
           >
-            <Type className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="text-xs max-w-8 sm:max-w-16 truncate hidden sm:inline">{selectedFont}</span>
-            <MoreHorizontal className="w-2.5 h-2.5 sm:w-3 sm:h-3 rotate-90" />
+            <Type className="w-3.5 h-3.5" />
+            <span className="text-xs max-w-16 sm:max-w-24 truncate font-medium">{selectedFont}</span>
+            <MoreHorizontal className="w-3 h-3 text-white/40" />
           </button>
           
           {showFontDropdown && (
-            <div className="absolute top-full mt-1 left-0 bg-background border border-border rounded-lg shadow-lg py-1 z-60 min-w-32">
+            <div className="absolute top-full mt-3 left-0 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl p-1 z-60 min-w-36 animate-in fade-in zoom-in-95 duration-200">
               {FONT_OPTIONS.map((font) => (
                 <button
                   key={font.value}
                   onClick={() => handleFontChange(font.value)}
-                  className="w-full px-3 py-1 text-xs text-left hover:bg-muted/50 transition-colors"
+                  className="w-full px-4 py-2 text-sm text-left hover:bg-white/10 rounded-xl transition-colors text-white/80"
                   style={{ fontFamily: font.value }}
                 >
                   {font.label}
@@ -170,74 +189,51 @@ export default function CustomizerToolbar({
           )}
         </div>
 
-        {/* Mobile: Compact Text Formatting */}
-        <div className="flex items-center gap-0.5 sm:gap-1 px-1 border-l border-r border-border/30">
+        <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+        {/* Text Formatting */}
+        <div className="flex items-center gap-1">
           <button
             onClick={toggleBold}
-            className={`p-0.5 sm:p-1 rounded transition-colors ${fontWeight === 'bold' ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-muted/50'}`}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all ${fontWeight === 'bold' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
             title="Bold"
           >
-            <Bold className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <Bold className="w-4 h-4" />
           </button>
           <button
             onClick={toggleUnderline}
-            className={`p-0.5 sm:p-1 rounded transition-colors ${textDecoration === 'underline' ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-muted/50'}`}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all ${textDecoration === 'underline' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
             title="Underline"
           >
-            <Underline className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <Underline className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Mobile: Compact Text Alignment */}
-        <div className="flex items-center gap-0.5 sm:gap-1 px-1">
+        <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+        {/* Text Alignment */}
+        <div className="flex items-center gap-1">
           <button
             onClick={() => handleAlignChange('left')}
-            className={`p-0.5 sm:p-1 rounded transition-colors ${textAlign === 'left' ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-muted/50'}`}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all ${textAlign === 'left' ? 'bg-white/20 text-white' : 'text-white/50 hover:bg-white/10 hover:text-white'}`}
             title="Align Left"
           >
-            <AlignLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <AlignLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleAlignChange('center')}
-            className={`p-0.5 sm:p-1 rounded transition-colors ${textAlign === 'center' ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-muted/50'}`}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all ${textAlign === 'center' ? 'bg-white/20 text-white' : 'text-white/50 hover:bg-white/10 hover:text-white'}`}
             title="Align Center"
           >
-            <AlignCenter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <AlignCenter className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleAlignChange('right')}
-            className={`p-0.5 sm:p-1 rounded transition-colors ${textAlign === 'right' ? 'bg-blue-500/20 text-blue-600' : 'hover:bg-muted/50'}`}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all ${textAlign === 'right' ? 'bg-white/20 text-white' : 'text-white/50 hover:bg-white/10 hover:text-white'}`}
             title="Align Right"
           >
-            <AlignRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <AlignRight className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Mobile: More Options Menu */}
-        <div className="relative sm:hidden">
-          <button
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-            className="p-0.5 hover:bg-muted/50 rounded transition-colors ml-1"
-            title="More Options"
-          >
-            <MoreVertical className="w-3.5 h-3.5" />
-          </button>
-          
-          {showMobileMenu && (
-            <div className="absolute top-full mt-1 right-0 bg-background border border-border rounded-lg shadow-lg py-1 z-60 min-w-32">
-              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                {selectedElement.replace(/^(profile-|text-|link-)/, '').replace(/-/g, ' ')}
-              </div>
-              <button className="w-full px-3 py-2 text-xs text-left hover:bg-muted/50 transition-colors flex items-center gap-2">
-                <Type className="w-3.5 h-3.5" />
-                Font Options
-              </button>
-              <button className="w-full px-3 py-2 text-xs text-left hover:bg-muted/50 transition-colors flex items-center gap-2">
-                <Palette className="w-3.5 h-3.5" />
-                More Colors
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
