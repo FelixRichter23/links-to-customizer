@@ -1,6 +1,6 @@
 // app/editor/ElementProperties.tsx
 import React from "react";
-import { type PageConfig, type TextElement, type Link } from "./types";
+import { type PageConfig, type TextElement, type Link, type ImageElement } from "./types";
 
 interface ElementPropertiesProps {
   selectedElement: string | null;
@@ -215,6 +215,51 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     setConfig(newConfig, (property === 'title' || property === 'url') ? 'text-change' : 'style-change');
   };
 
+  // Handler für Image Element Änderungen
+  const handleImageChange = (imageId: string, property: string, value: string | number | boolean) => {
+    const constraints = getConstraints();
+    const newConfig = JSON.parse(JSON.stringify(config));
+    const imageIndex = newConfig[viewMode].images?.findIndex((img: ImageElement) => img.id === imageId);
+    
+    if (imageIndex !== -1 && imageIndex !== undefined) {
+      if (property.startsWith('position.')) {
+        const positionProp = property.split('.')[1];
+        const currentPos = newConfig[viewMode].images[imageIndex].position;
+        let newValue = Math.round(Number(value));
+        
+        // Custom images use constraints similar to avatar
+        const imgConstraints = constraints.avatar;
+        if (positionProp === 'width') {
+          newValue = validateAndClamp(newValue, imgConstraints.minWidth, imgConstraints.maxWidth);
+          const maxPos = getMaxPositions('avatar', newValue, currentPos.height);
+          if (currentPos.x > maxPos.maxX) {
+            newConfig[viewMode].images[imageIndex].position.x = maxPos.maxX;
+          }
+        } else if (positionProp === 'height') {
+          newValue = validateAndClamp(newValue, imgConstraints.minHeight, imgConstraints.maxHeight);
+          const maxPos = getMaxPositions('avatar', currentPos.width, newValue);
+          if (currentPos.y > maxPos.maxY) {
+            newConfig[viewMode].images[imageIndex].position.y = maxPos.maxY;
+          }
+        } else if (positionProp === 'x') {
+          const maxPos = getMaxPositions('avatar', currentPos.width, currentPos.height);
+          newValue = validateAndClamp(newValue, imgConstraints.minX, maxPos.maxX);
+        } else if (positionProp === 'y') {
+          const maxPos = getMaxPositions('avatar', currentPos.width, currentPos.height);
+          newValue = validateAndClamp(newValue, imgConstraints.minY, maxPos.maxY);
+        }
+        
+        newConfig[viewMode].images[imageIndex].position = {
+          ...newConfig[viewMode].images[imageIndex].position,
+          [positionProp]: newValue
+        };
+      } else {
+        newConfig[viewMode].images[imageIndex][property] = value;
+      }
+    }
+    setConfig(newConfig, property === 'url' ? 'text-change' : 'style-change');
+  };
+
   // UI Helpers removed from inside to avoid recreating components on every render
 
   if (!selectedElement) {
@@ -375,15 +420,57 @@ export default function ElementProperties({ selectedElement, config, setConfig, 
     );
   }
 
+  // Image Properties
+  if (selectedElement && selectedElement.startsWith('image-')) {
+    const img = (currentViewport.images || []).find((i) => i.id === selectedElement);
+    if (!img) return null;
+
+    const constraints = getConstraints();
+    const imageConstraints = constraints.avatar;
+    const maxPos = getMaxPositions('avatar', img.position.width, img.position.height);
+    
+    return (
+      <PropertyCard title="Image Element" icon={<span className="text-xs">🖼️</span>}>
+        <div className="space-y-4">
+          <InputField 
+            label="Image URL" 
+            type="url" 
+            value={img.url} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleImageChange(selectedElement, 'url', e.target.value)} 
+          />
+          <PositionGrid 
+            x={img.position.x} y={img.position.y} w={img.position.width} h={img.position.height}
+            constraints={imageConstraints} maxPos={maxPos}
+            onChange={(prop: string, val: string) => handleImageChange(selectedElement, `position.${prop}`, parseInt(val) || 0)}
+          />
+          <div className="space-y-1.5 pt-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Border Radius</label>
+              <span className="text-xs font-mono bg-white/10 px-1.5 py-0.5 rounded">{img.borderRadius ?? 0}px</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={img.borderRadius ?? 0}
+              onChange={(e) => handleImageChange(selectedElement, 'borderRadius', parseInt(e.target.value))}
+              className="w-full accent-primary h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
+            />
+          </div>
+        </div>
+      </PropertyCard>
+    );
+  }
+
   return null;
 }
 
 // UI Helpers (Moved outside ElementProperties to prevent focus loss)
 const PropertyCard = ({ children, title, icon }: { children: React.ReactNode, title: string, icon?: React.ReactNode }) => (
-  <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-xl shadow-xl transition-all duration-300">
+  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-xl shadow-xl transition-all duration-300">
     <div className="flex items-center gap-2 mb-4">
-      {icon && <div className="p-1.5 bg-primary/20 rounded-lg text-primary">{icon}</div>}
-      <h3 className="font-semibold tracking-tight">{title}</h3>
+      {icon && <div className="text-primary">{icon}</div>}
+      <h3 className="font-semibold tracking-tight text-sm">{title}</h3>
     </div>
     {children}
   </div>
@@ -407,7 +494,7 @@ const InputField = ({ label, type, value, onChange, min, max }: InputFieldProps)
       max={max}
       value={value}
       onChange={onChange}
-      className="w-full bg-black/20 p-2.5 rounded-xl text-sm text-foreground border border-white/5 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+      className="w-full bg-black/20 p-2 rounded-lg text-sm text-foreground border border-white/5 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
     />
   </div>
 );
@@ -436,19 +523,19 @@ const PositionGrid = ({ x, y, w, h, onChange, constraints, maxPos }: PositionGri
   <div className="space-y-2 pt-2">
     <label className="text-sm font-medium text-muted-foreground">Position & Size</label>
     <div className="grid grid-cols-4 gap-2">
-      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+      <div className="bg-black/20 border border-white/5 rounded-lg p-1.5 flex flex-col items-center">
         <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">X</label>
         <input type="number" min={constraints.minX} max={maxPos.maxX} value={x} onChange={(e) => onChange('x', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
       </div>
-      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+      <div className="bg-black/20 border border-white/5 rounded-lg p-1.5 flex flex-col items-center">
         <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">Y</label>
         <input type="number" min={constraints.minY} max={maxPos.maxY} value={y} onChange={(e) => onChange('y', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
       </div>
-      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+      <div className="bg-black/20 border border-white/5 rounded-lg p-1.5 flex flex-col items-center">
         <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">W</label>
         <input type="number" min={constraints.minWidth} max={constraints.maxWidth} value={w} onChange={(e) => onChange('width', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
       </div>
-      <div className="bg-black/20 border border-white/5 rounded-xl p-2 flex flex-col items-center">
+      <div className="bg-black/20 border border-white/5 rounded-lg p-1.5 flex flex-col items-center">
         <label className="text-[10px] uppercase text-white/50 mb-1 font-semibold">H</label>
         <input type="number" min={constraints.minHeight} max={constraints.maxHeight} value={h} onChange={(e) => onChange('height', e.target.value)} className="w-full bg-transparent text-center text-sm outline-none" />
       </div>

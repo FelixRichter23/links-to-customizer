@@ -7,8 +7,9 @@ import Preview from "./Preview";
 import ElementProperties from "./ElementProperties";
 import UndoRedoToolbar from "./components/UndoRedoToolbar";
 import CustomizerToolbar from "./CustomizerToolbar";
+import LayersPanel from "./components/LayersPanel";
 import { useUndoRedo } from "./hooks/useUndoRedo";
-import { type PageConfig, type ViewportConfig } from "./types";
+import { type PageConfig, type ViewportConfig, type TextElement, type Link, type ImageElement } from "./types";
 import { Download, Settings } from "lucide-react";
 
 // Startkonfiguration für den Editor
@@ -22,6 +23,9 @@ const initialConfig: PageConfig = {
       direction: "to bottom right",
     },
     backgroundImage: "",
+    backgroundImagePositionX: 50,
+    backgroundImagePositionY: 50,
+    backgroundZoom: 1,
     buttonColor: "#9fd2d1",
     buttonTextColor: "#070c0e",
     textColor: "#f2f7f7",
@@ -30,14 +34,15 @@ const initialConfig: PageConfig = {
   mobile: {
     profile: {
       avatarUrl: "https://avatar.vercel.sh/your-name",
-      position: { x: 92, y: 50, width: 96, height: 96 }, // Centered in 280px: (280-96)/2 = 92
+      position: { x: 92, y: 50, width: 96, height: 96, zIndex: 10 }, // Centered in 280px: (280-96)/2 = 92
+      visible: true,
     },
     textElements: [
       {
         id: "profile-name",
         type: "text" as const,
         content: "Your Name",
-        position: { x: 10, y: 150, width: 260, height: 30 },
+        position: { x: 10, y: 150, width: 260, height: 30, zIndex: 20 },
         style: {
           fontSize: 20,
           fontWeight: "bold",
@@ -45,12 +50,13 @@ const initialConfig: PageConfig = {
           color: "#f2f7f7",
         },
         order: 1,
+        visible: true,
       },
       {
         id: "profile-bio", 
         type: "text" as const,
         content: "Your short and catchy bio goes here!",
-        position: { x: 10, y: 185, width: 260, height: 30 },
+        position: { x: 10, y: 185, width: 260, height: 30, zIndex: 30 },
         style: {
           fontSize: 14,
           fontWeight: "normal",
@@ -58,6 +64,7 @@ const initialConfig: PageConfig = {
           color: "#f2f7f7",
         },
         order: 2,
+        visible: true,
       }
     ],
     links: [
@@ -66,28 +73,32 @@ const initialConfig: PageConfig = {
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 10, y: 240, width: 260, height: 40 } // Adjusted for new text element positions
+        position: { x: 10, y: 240, width: 260, height: 40, zIndex: 40 }, // Adjusted for new text element positions
+        visible: true,
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 10, y: 295, width: 260, height: 40 } // Adjusted for new text element positions
+        position: { x: 10, y: 295, width: 260, height: 40, zIndex: 50 }, // Adjusted for new text element positions
+        visible: true,
       },
     ],
+    images: [],
   },
   desktop: {
     profile: {
       avatarUrl: "https://avatar.vercel.sh/your-name",
-      position: { x: 360, y: 100, width: 128, height: 128 },
+      position: { x: 360, y: 100, width: 128, height: 128, zIndex: 10 },
+      visible: true,
     },
     textElements: [
       {
         id: "profile-name",
         type: "text" as const,
         content: "Your Name",
-        position: { x: 240, y: 240, width: 368, height: 40 },
+        position: { x: 240, y: 240, width: 368, height: 40, zIndex: 20 },
         style: {
           fontSize: 28,
           fontWeight: "bold",
@@ -95,12 +106,13 @@ const initialConfig: PageConfig = {
           color: "#f2f7f7",
         },
         order: 1,
+        visible: true,
       },
       {
         id: "profile-bio",
         type: "text" as const, 
         content: "Your short and catchy bio goes here!",
-        position: { x: 240, y: 285, width: 368, height: 30 },
+        position: { x: 240, y: 285, width: 368, height: 30, zIndex: 30 },
         style: {
           fontSize: 16,
           fontWeight: "normal",
@@ -108,6 +120,7 @@ const initialConfig: PageConfig = {
           color: "#f2f7f7",
         },
         order: 2,
+        visible: true,
       }
     ],
     links: [
@@ -116,16 +129,19 @@ const initialConfig: PageConfig = {
         title: "My Website", 
         url: "https://example.com", 
         order: 1,
-        position: { x: 360, y: 340, width: 200, height: 50 }
+        position: { x: 360, y: 340, width: 200, height: 50, zIndex: 40 },
+        visible: true,
       },
       { 
         id: 2, 
         title: "Twitter / X", 
         url: "https://twitter.com", 
         order: 2,
-        position: { x: 360, y: 410, width: 200, height: 50 }
+        position: { x: 360, y: 410, width: 200, height: 50, zIndex: 50 },
+        visible: true,
       },
     ],
+    images: [],
   }
 };
 
@@ -195,6 +211,100 @@ export default function EditorPage() {
       }, actionType);
     }
   };
+
+  // Reorder elements for Photoshop-style layers ordering (z-index manipulation)
+  const reorderElement = (elementId: string, direction: 'up' | 'down' | 'front' | 'back') => {
+    const currentViewport = config[viewMode];
+    
+    // Gather all elements and their current zIndex (default to 10 if undefined)
+    const elementsList: Array<{ id: string; zIndex: number; type: 'avatar' | 'text' | 'link' | 'image' }> = [
+      { id: 'avatar', zIndex: currentViewport.profile.position.zIndex ?? 10, type: 'avatar' },
+      ...currentViewport.textElements.map(t => ({ id: t.id, zIndex: t.position.zIndex ?? 10, type: 'text' as const })),
+      ...currentViewport.links.map(l => ({ id: `link-${l.id}`, zIndex: l.position.zIndex ?? 10, type: 'link' as const })),
+      ...(currentViewport.images || []).map(img => ({ id: img.id, zIndex: img.position.zIndex ?? 10, type: 'image' as const }))
+    ];
+    
+    // Sort descending by zIndex (Photoshop style: top-most is index 0)
+    elementsList.sort((a, b) => b.zIndex - a.zIndex);
+    
+    const index = elementsList.findIndex(el => el.id === elementId);
+    if (index === -1) return;
+    
+    const newList = [...elementsList];
+    if (direction === 'up' && index > 0) {
+      // Swap with element above (index - 1)
+      const temp = newList[index - 1];
+      newList[index - 1] = newList[index];
+      newList[index] = temp;
+    } else if (direction === 'down' && index < newList.length - 1) {
+      // Swap with element below (index + 1)
+      const temp = newList[index + 1];
+      newList[index + 1] = newList[index];
+      newList[index] = temp;
+    } else if (direction === 'front') {
+      // Move to index 0
+      const [item] = newList.splice(index, 1);
+      newList.unshift(item);
+    } else if (direction === 'back') {
+      // Move to end of list
+      const [item] = newList.splice(index, 1);
+      newList.push(item);
+    } else {
+      return; // No changes
+    }
+    
+    // Reassign zIndex values cleanly: index 0 gets (length * 10), index 1 gets ((length - 1) * 10), etc.
+    const newConfig = JSON.parse(JSON.stringify(config));
+    const len = newList.length;
+    
+    newList.forEach((el, idx) => {
+      const assignedZIndex = (len - idx) * 10;
+      
+      if (el.id === 'avatar') {
+        newConfig[viewMode].profile.position.zIndex = assignedZIndex;
+      } else if (el.id.startsWith('text-') || el.id.startsWith('profile-')) {
+        const item = newConfig[viewMode].textElements.find((t: TextElement) => t.id === el.id);
+        if (item) item.position.zIndex = assignedZIndex;
+      } else if (el.id.startsWith('link-')) {
+        const linkId = parseInt(el.id.replace('link-', ''));
+        const item = newConfig[viewMode].links.find((l: Link) => l.id === linkId);
+        if (item) item.position.zIndex = assignedZIndex;
+      } else if (el.id.startsWith('image-')) {
+        const item = newConfig[viewMode].images?.find((img: ImageElement) => img.id === el.id);
+        if (item) item.position.zIndex = assignedZIndex;
+      }
+    });
+    
+    setConfig(newConfig, 'style-change');
+  };
+
+  // Keyboard listener for layer reordering (Ctrl + [ / Ctrl + ])
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedElement) return;
+      
+      // Ignore shortcut if user is typing in form controls
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      
+      if (e.ctrlKey) {
+        if (e.key === ']' || e.code === 'BracketRight') {
+          e.preventDefault();
+          reorderElement(selectedElement, 'up');
+        } else if (e.key === '[' || e.code === 'BracketLeft') {
+          e.preventDefault();
+          reorderElement(selectedElement, 'down');
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedElement, config, viewMode]);
   
   // Debug Panel Position & Size State
   const [debugPosition, setDebugPosition] = useState({ x: 100, y: 100 });
@@ -360,6 +470,16 @@ export default function EditorPage() {
               ? 'max-w-sm mx-auto xl:max-w-none' // Desktop: Schmaler
               : 'max-w-none' // Mobile: Normale Breite
           }`}>
+            {/* Layers & Ordering Panel */}
+            <LayersPanel
+              config={config}
+              setConfig={setConfig}
+              viewMode={viewMode}
+              selectedElement={selectedElement}
+              setSelectedElement={setSelectedElement}
+              reorderElement={reorderElement}
+            />
+
             {/* Properties Panel über Controls (beide Modi) */}
              <ElementProperties
               selectedElement={selectedElement}

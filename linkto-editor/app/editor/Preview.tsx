@@ -68,6 +68,7 @@ const getElementConstraints = (elementId: string, viewMode: 'mobile' | 'desktop'
   if (elementId === 'avatar') return constraints.avatar;
   if (elementId === 'bio') return constraints.bio;
   if (elementId.startsWith('link-')) return constraints.link;
+  if (elementId.startsWith('image-')) return constraints.avatar;
   return constraints.link; // Fallback
 };
 
@@ -95,7 +96,8 @@ const applyConstraintsToPosition = (
     x: clampedX,
     y: clampedY,
     width: clampedWidth,
-    height: clampedHeight
+    height: clampedHeight,
+    zIndex: position.zIndex
   };
 };
 
@@ -368,7 +370,7 @@ export default function Preview({
 }: PreviewProps) {
   const { design } = config;
   const currentViewport = config[viewMode];
-  const { profile, textElements, links } = currentViewport;
+  const { profile, textElements, links, images } = currentViewport;
 
   // Interactive state
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, elementX: 0, elementY: 0 });
@@ -384,6 +386,8 @@ export default function Preview({
   });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isDraggingBackground, setIsDraggingBackground] = useState(false);
+  const [bgDragStart, setBgDragStart] = useState({ x: 0, y: 0, startX: 50, startY: 50 });
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -402,6 +406,28 @@ export default function Preview({
     isMobile: false
   });
 
+  // Background mousedown handler
+  const handleBackgroundMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!isInteractive || !setConfig || design.backgroundType !== 'image') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = design.backgroundImagePositionX ?? 50;
+    const startY = design.backgroundImagePositionY ?? 50;
+
+    setBgDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      startX,
+      startY
+    });
+    setIsDraggingBackground(true);
+
+    if (setSelectedElement) {
+      setSelectedElement(null); // Deselect active element
+    }
+  }, [isInteractive, setConfig, design.backgroundType, design.backgroundImagePositionX, design.backgroundImagePositionY, setSelectedElement]);
+
   // Hilfsfunktionen für Element-Management
   const getCurrentElementPosition = (elementId: string) => {
     if (elementId === 'avatar') {
@@ -413,6 +439,9 @@ export default function Preview({
       const linkId = parseInt(elementId.replace('link-', ''));
       const link = links.find(l => l.id === linkId);
       return link ? { id: elementId, position: link.position } : null;
+    } else if (elementId.startsWith('image-')) {
+      const img = (images || []).find(i => i.id === elementId);
+      return img ? { id: elementId, position: img.position } : null;
     } else {
       // Fallback für andere Formate
       const link = links.find(l => l.id.toString() === elementId);
@@ -442,6 +471,13 @@ export default function Preview({
         elements.push({ id: linkElementId, position: link.position });
       }
     });
+
+    // Custom images hinzufügen (außer dem ausgewählten)
+    (images || []).forEach(img => {
+      if (img.id !== excludeId) {
+        elements.push({ id: img.id, position: img.position });
+      }
+    });
     
     return elements;
   };
@@ -460,11 +496,7 @@ export default function Preview({
         };
       case 'image':
         return {
-          backgroundImage: design.backgroundImage ? `url(${design.backgroundImage})` : undefined,
           backgroundColor: design.backgroundColor, // Fallback
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
           color: design.textColor,
         };
       case 'solid':
@@ -625,6 +657,22 @@ export default function Preview({
             newConfig[viewMode].links.push(newLink);
             setConfig(newConfig);
           }
+        } else if (elementId.startsWith('image-')) {
+          const img = (images || []).find(i => i.id === elementId);
+          if (img) {
+            const newImg = {
+              ...img,
+              id: `image-${Date.now()}`,
+              position: {
+                ...img.position,
+                x: img.position.x + 20,
+                y: img.position.y + 20
+              }
+            };
+            if (!newConfig[viewMode].images) newConfig[viewMode].images = [];
+            newConfig[viewMode].images.push(newImg);
+            setConfig(newConfig);
+          }
         }
         break;
       
@@ -636,6 +684,8 @@ export default function Preview({
         } else if (elementId.startsWith('link-')) {
           const linkId = parseInt(elementId.replace('link-', ''));
           deleteConfig[viewMode].links = links.filter(l => l.id !== linkId);
+        } else if (elementId.startsWith('image-')) {
+          deleteConfig[viewMode].images = (images || []).filter(i => i.id !== elementId);
         }
         setConfig(deleteConfig);
         if (setSelectedElement && selectedElement === elementId) {
@@ -650,7 +700,38 @@ export default function Preview({
     }
     
     closeContextMenu();
-  }, [config, setConfig, viewMode, textElements, links, setSelectedElement, selectedElement, closeContextMenu]);
+  }, [config, setConfig, viewMode, textElements, links, images, setSelectedElement, selectedElement, closeContextMenu]);
+
+  // Background Zoom via Mouse Wheel
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !isInteractive || !setConfig || design.backgroundType !== 'image' || !design.backgroundImage) return;
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      const zoomSpeed = 0.05;
+      const currentZoom = design.backgroundZoom ?? 1;
+      const delta = -e.deltaY;
+      
+      let newZoom = currentZoom + (delta > 0 ? zoomSpeed : -zoomSpeed);
+      newZoom = Math.max(1, Math.min(3, Math.round(newZoom * 100) / 100));
+      
+      const newConfig = {
+        ...config,
+        design: {
+          ...config.design,
+          backgroundZoom: newZoom
+        }
+      };
+      setConfig(newConfig, 'style-change');
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheelEvent);
+    };
+  }, [isInteractive, setConfig, design.backgroundType, design.backgroundImage, design.backgroundZoom, config, viewMode]);
 
   // Mouse Move & Up Effects
   useEffect(() => {
@@ -658,6 +739,37 @@ export default function Preview({
 
     const handleMouseMove = (e: MouseEvent) => {
       const isCtrlPressed = e.ctrlKey; // Ctrl-Taste deaktiviert Snapping
+      
+      if (isDraggingBackground) {
+        const deltaX = e.clientX - bgDragStart.x;
+        const deltaY = e.clientY - bgDragStart.y;
+        
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          // Calculate delta in percentage, adjusted for zoom level
+          const zoom = design.backgroundZoom ?? 1;
+          const percentX = (deltaX / containerRect.width) * 100 / zoom;
+          const percentY = (deltaY / containerRect.height) * 100 / zoom;
+          
+          let newBgX = bgDragStart.startX - percentX;
+          let newBgY = bgDragStart.startY - percentY;
+          
+          // Clamp to 0%-100% as requested by the user
+          newBgX = Math.max(0, Math.min(100, Math.round(newBgX)));
+          newBgY = Math.max(0, Math.min(100, Math.round(newBgY)));
+          
+          const newConfig = {
+            ...config,
+            design: {
+              ...config.design,
+              backgroundImagePositionX: newBgX,
+              backgroundImagePositionY: newBgY
+            }
+          };
+          setConfig(newConfig, 'bg-drag');
+        }
+        return;
+      }
       
       if (isDragging && selectedElement) {
         const deltaX = e.clientX - dragStart.x;
@@ -970,15 +1082,16 @@ export default function Preview({
     };
 
     const handleMouseUp = () => {
-      if (isDragging || isResizing) {
+      if (isDragging || isResizing || isDraggingBackground) {
         setConfig(config, 'drag-end');
       }
       setIsDragging(false);
       setIsResizing(false);
+      setIsDraggingBackground(false);
       setAlignmentGuides([]); // Guides verstecken wenn Aktion beendet
     };
 
-    if (isDragging || isResizing) {
+    if (isDragging || isResizing || isDraggingBackground) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -986,7 +1099,8 @@ export default function Preview({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, selectedElement, dragStart, resizeStart, isInteractive, setConfig, config]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDragging, isResizing, isDraggingBackground, selectedElement, dragStart, resizeStart, bgDragStart, isInteractive, setConfig, config, design.backgroundZoom, viewMode]);
 
   // Update Element Position
   const updateElementPosition = (elementId: string, updates: Partial<ElementPosition>, actionType: string = 'drag') => {
@@ -1001,6 +1115,7 @@ export default function Preview({
       ...(updates.y !== undefined && { y: Math.round(updates.y) }),
       ...(updates.width !== undefined && { width: Math.round(updates.width) }),
       ...(updates.height !== undefined && { height: Math.round(updates.height) }),
+      ...(updates.zIndex !== undefined && { zIndex: Math.round(updates.zIndex) }),
     };
     
     if (elementId === 'avatar') {
@@ -1034,6 +1149,17 @@ export default function Preview({
         const constrainedPos = applyConstraintsToPosition(elementId, newPos, viewMode);
         
         newConfig[viewMode].links[linkIndex].position = constrainedPos;
+      }
+    } else if (elementId.startsWith('image-')) {
+      const imageIndex = (newConfig[viewMode].images || []).findIndex(img => img.id === elementId);
+      if (imageIndex !== -1 && newConfig[viewMode].images) {
+        const currentPos = newConfig[viewMode].images[imageIndex].position;
+        const newPos = { ...currentPos, ...roundedUpdates };
+        
+        // Wende Constraints an (nutzt 'avatar' Constraints)
+        const constrainedPos = applyConstraintsToPosition('avatar', newPos, viewMode);
+        
+        newConfig[viewMode].images[imageIndex].position = constrainedPos;
       }
     }
 
@@ -1211,30 +1337,53 @@ export default function Preview({
           <div
             ref={containerRef}
             className="relative w-full h-full overflow-hidden"
-            style={getBackgroundStyle()}
+            style={{
+              ...getBackgroundStyle(),
+              cursor: isInteractive && design.backgroundType === 'image' ? (isDraggingBackground ? 'grabbing' : 'grab') : 'default'
+            }}
             onClick={handleBackgroundClick}
+            onMouseDown={handleBackgroundMouseDown}
           >
-            {/* Avatar */}
-            <SelectionBox 
-              elementId="avatar"
-              style={{
-                position: 'absolute',
-                left: profile.position.x,
-                top: profile.position.y,
-                width: profile.position.width,
-                height: profile.position.height,
-              }}
-            >
-              <img
-                src={profile.avatarUrl}
-                alt="Avatar"
-                className="w-full h-full rounded-full object-cover border-[4px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
+            {/* Background Image Layer */}
+            {design.backgroundType === 'image' && design.backgroundImage && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: `url(${design.backgroundImage})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: `${design.backgroundImagePositionX ?? 50}% ${design.backgroundImagePositionY ?? 50}%`,
+                  backgroundRepeat: 'no-repeat',
+                  transform: `scale(${design.backgroundZoom ?? 1})`,
+                  transformOrigin: `${design.backgroundImagePositionX ?? 50}% ${design.backgroundImagePositionY ?? 50}%`,
+                  zIndex: 0,
+                  transition: isDraggingBackground ? 'none' : 'transform 0.1s ease-out',
+                }}
               />
-            </SelectionBox>
+            )}
+            {/* Avatar */}
+            {profile.visible !== false && (
+              <SelectionBox 
+                elementId="avatar"
+                style={{
+                  position: 'absolute',
+                  left: profile.position.x,
+                  top: profile.position.y,
+                  width: profile.position.width,
+                  height: profile.position.height,
+                  zIndex: profile.position.zIndex ?? 10,
+                }}
+              >
+                <img
+                  src={profile.avatarUrl}
+                  alt="Avatar"
+                  className="w-full h-full rounded-full object-cover border-[4px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
+                />
+              </SelectionBox>
+            )}
 
             {/* Text Elements */}
             {textElements
-              .sort((a, b) => a.order - b.order)
+              .filter(t => t.visible !== false)
               .map((textElement) => (
                 <SelectionBox 
                   key={textElement.id} 
@@ -1245,6 +1394,7 @@ export default function Preview({
                     top: textElement.position.y,
                     width: textElement.position.width,
                     height: textElement.position.height,
+                    zIndex: textElement.position.zIndex ?? 10,
                   }}
                 >
                   <div 
@@ -1273,7 +1423,7 @@ export default function Preview({
 
             {/* Links */}
             {links
-              .sort((a, b) => a.order - b.order)
+              .filter(l => l.visible !== false)
               .map((link) => (
                 <SelectionBox 
                   key={link.id} 
@@ -1284,6 +1434,7 @@ export default function Preview({
                     top: link.position.y,
                     width: link.position.width,
                     height: link.position.height,
+                    zIndex: link.position.zIndex ?? 10,
                   }}
                 >
                   <a
@@ -1308,6 +1459,33 @@ export default function Preview({
                     <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     <span className="relative z-10">{link.title}</span>
                   </a>
+                </SelectionBox>
+              ))}
+
+            {/* Custom Images */}
+            {(images || [])
+              .filter(img => img.visible !== false)
+              .map((img) => (
+                <SelectionBox
+                  key={img.id}
+                  elementId={img.id}
+                  style={{
+                    position: 'absolute',
+                    left: img.position.x,
+                    top: img.position.y,
+                    width: img.position.width,
+                    height: img.position.height,
+                    zIndex: img.position.zIndex ?? 10,
+                  }}
+                >
+                  <img
+                    src={img.url || "https://avatar.vercel.sh/placeholder"}
+                    alt="Custom Image"
+                    className="w-full h-full object-cover border border-white/10 pointer-events-none transition-transform duration-300 hover:scale-105 shadow-md"
+                    style={{
+                      borderRadius: `${img.borderRadius ?? 0}px`
+                    }}
+                  />
                 </SelectionBox>
               ))}
 
@@ -1359,30 +1537,53 @@ export default function Preview({
       <div
         ref={containerRef}
         className="relative w-full h-full overflow-hidden pt-8"
-        style={getBackgroundStyle()}
+        style={{
+          ...getBackgroundStyle(),
+          cursor: isInteractive && design.backgroundType === 'image' ? (isDraggingBackground ? 'grabbing' : 'grab') : 'default'
+        }}
         onClick={handleBackgroundClick}
+        onMouseDown={handleBackgroundMouseDown}
       >
-        {/* Avatar */}
-        <SelectionBox 
-          elementId="avatar"
-          style={{
-            position: 'absolute',
-            left: profile.position.x,
-            top: profile.position.y,
-            width: profile.position.width,
-            height: profile.position.height,
-          }}
-        >
-          <img
-            src={profile.avatarUrl}
-            alt="Avatar"
-            className="w-full h-full rounded-full object-cover border-[3px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
+        {/* Background Image Layer */}
+        {design.backgroundType === 'image' && design.backgroundImage && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `url(${design.backgroundImage})`,
+              backgroundSize: 'cover',
+              backgroundPosition: `${design.backgroundImagePositionX ?? 50}% ${design.backgroundImagePositionY ?? 50}%`,
+              backgroundRepeat: 'no-repeat',
+              transform: `scale(${design.backgroundZoom ?? 1})`,
+              transformOrigin: `${design.backgroundImagePositionX ?? 50}% ${design.backgroundImagePositionY ?? 50}%`,
+              zIndex: 0,
+              transition: isDraggingBackground ? 'none' : 'transform 0.1s ease-out',
+            }}
           />
-        </SelectionBox>
+        )}
+        {/* Avatar */}
+        {profile.visible !== false && (
+          <SelectionBox 
+            elementId="avatar"
+            style={{
+              position: 'absolute',
+              left: profile.position.x,
+              top: profile.position.y,
+              width: profile.position.width,
+              height: profile.position.height,
+              zIndex: profile.position.zIndex ?? 10,
+            }}
+          >
+            <img
+              src={profile.avatarUrl}
+              alt="Avatar"
+              className="w-full h-full rounded-full object-cover border-[3px] border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-sm pointer-events-none transition-transform duration-300 hover:scale-105"
+            />
+          </SelectionBox>
+        )}
 
         {/* Text Elements */}
         {textElements
-          .sort((a, b) => a.order - b.order)
+          .filter(t => t.visible !== false)
           .map((textElement) => (
             <SelectionBox 
               key={textElement.id} 
@@ -1393,6 +1594,7 @@ export default function Preview({
                 top: textElement.position.y,
                 width: textElement.position.width,
                 height: textElement.position.height,
+                zIndex: textElement.position.zIndex ?? 10,
               }}
             >
              <div 
@@ -1421,7 +1623,7 @@ export default function Preview({
 
         {/* Links */}
         {links
-          .sort((a, b) => a.order - b.order)
+          .filter(l => l.visible !== false)
           .map((link) => (
             <SelectionBox 
               key={link.id} 
@@ -1432,6 +1634,7 @@ export default function Preview({
                 top: link.position.y,
                 width: link.position.width,
                 height: link.position.height,
+                zIndex: link.position.zIndex ?? 10,
               }}
             >
               <a
@@ -1456,6 +1659,33 @@ export default function Preview({
                 <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <span className="relative z-10">{link.title}</span>
               </a>
+            </SelectionBox>
+          ))}
+
+        {/* Custom Images */}
+        {(images || [])
+          .filter(img => img.visible !== false)
+          .map((img) => (
+            <SelectionBox
+              key={img.id}
+              elementId={img.id}
+              style={{
+                position: 'absolute',
+                left: img.position.x,
+                top: img.position.y,
+                width: img.position.width,
+                height: img.position.height,
+                zIndex: img.position.zIndex ?? 10,
+              }}
+            >
+              <img
+                src={img.url || "https://avatar.vercel.sh/placeholder"}
+                alt="Custom Image"
+                className="w-full h-full object-cover border border-white/10 pointer-events-none transition-transform duration-300 hover:scale-105 shadow-sm"
+                style={{
+                  borderRadius: `${img.borderRadius ?? 0}px`
+                }}
+              />
             </SelectionBox>
           ))}
 

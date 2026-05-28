@@ -5,6 +5,7 @@ export interface ElementPosition {
   y: number;
   width: number;
   height: number;
+  zIndex?: number;
 }
 
 export interface FontStyle {
@@ -29,6 +30,17 @@ export interface TextElement {
   position: ElementPosition;
   style: FontStyle;
   order: number;
+  visible?: boolean;
+}
+
+export interface ImageElement {
+  id: string;
+  type: 'image';
+  url: string;
+  position: ElementPosition;
+  borderRadius?: number;
+  order: number;
+  visible?: boolean;
 }
 
 export interface AlignmentGuide {
@@ -42,20 +54,11 @@ export interface ViewportConfig {
   profile: {
     avatarUrl: string;
     position: ElementPosition; // Avatar Position
+    visible?: boolean;
   };
   textElements: TextElement[];
-  links: {
-    id: number;
-    title: string;
-    url: string;
-    order: number;
-    position: ElementPosition;
-    customColor?: string;
-    customTextColor?: string;
-    customBorderRadius?: number;
-    fontSize?: number;
-    fontStyle?: FontStyle;
-  }[];
+  links: Link[];
+  images?: ImageElement[];
 }
 
 export interface PageConfig {
@@ -68,6 +71,9 @@ export interface PageConfig {
       direction: string;
     };
     backgroundImage: string;
+    backgroundImagePositionX?: number;
+    backgroundImagePositionY?: number;
+    backgroundZoom?: number;
     buttonColor: string;
     buttonTextColor: string;
     textColor: string;
@@ -90,6 +96,7 @@ export interface Link {
     customBorderRadius?: number;
     fontSize?: number;
     fontStyle?: FontStyle;
+    visible?: boolean;
 }
 
 export interface Design {
